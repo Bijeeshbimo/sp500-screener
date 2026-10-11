@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S&amp;P 500 Screener</title>
+<style>
+  :root {
+    --bg:#fbfbf9; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e2dc; --card:#ffffff;
+    --up:#0f7b4d; --accent:#2b5fd9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141413; --fg:#ecebe6; --muted:#9a9990; --line:#2c2c29; --card:#1b1b19;
+             --up:#4cc38a; --accent:#7ba0ff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+  .stat b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
+  .stat span { color:var(--muted); font-size:12px; }
+  details { background:var(--card); border:1px solid var(--line); border-radius:10px;
+            padding:10px 14px; margin-bottom:18px; font-size:13.5px; }
+  summary { cursor:pointer; font-weight:600; }
+  details ol { margin:8px 0 0; padding-left:20px; color:var(--muted); }
+  .tw { overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  th, td { padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); }
+  th:nth-child(-n+3), td:nth-child(-n+3) { text-align:left; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+       cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); }
+  th:hover { color:var(--fg); }
+  tr:last-child td { border-bottom:0; }
+  td a { color:var(--accent); text-decoration:none; }
+  .nm { display:block; color:var(--muted); font-size:12px; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+  .up { color:var(--up); font-weight:600; }
+  .empty { text-align:center !important; color:var(--muted); padding:28px; }
+  .foot { color:var(--muted); font-size:12px; margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>S&amp;P 500 Screener</h1>
+  <div class="sub">Session of 2026-10-09 &middot; refreshed 2026-10-11 16:39 UTC</div>
+
+  <div class="stats">
+    <div class="stat"><b>503</b><span>stocks scanned</span></div>
+    <div class="stat"><b>5</b><span>passed all filters</span></div>
+    <div class="stat"><b>5</b><span>shown (top 20 by daily change)</span></div>
+  </div>
+
+  <details>
+    <summary>Criteria</summary>
+    <ol>
+      <li>Open within &plusmn;1% of the 20 EMA (EMA as of the prior close).</li>
+      <li>50 EMA above 200 EMA on each of the last 50 sessions.</li>
+      <li>Big bullish candle: close &gt; open, body &ge; 1.5&times; the average body of the prior 20 candles, and close above the highs of the prior 2 candles.</li>
+      <li>Daily change above 0% and no more than 15% (filters out extreme jumps).</li>
+    </ol>
+  </details>
+
+  <div class="tw">
+    <table id="t">
+      <thead><tr>
+        <th>#</th><th>Symbol</th><th>Sector</th><th>Close</th><th>Day %</th>
+        <th>Open vs 20 EMA</th><th>Body vs avg</th><th>20 EMA</th><th>50 EMA</th><th>200 EMA</th>
+      </tr></thead>
+      <tbody><tr><td data-v='1'>1</td><td data-v='ELV'><a href='https://www.tradingview.com/chart/?symbol=ELV' target='_blank' rel='noopener'><b>ELV</b></a><span class='nm'>Elevance Health</span></td><td data-v='Health Care'>Health Care</td><td data-v='412.7000'>412.70</td><td data-v='2.9331' class='up'>+2.93%</td><td data-v='0.7924'>+0.79%</td><td data-v='3.1084'>3.1&times;</td><td data-v='400.0878'>400.09</td><td data-v='398.2213'>398.22</td><td data-v='375.2667'>375.27</td></tr><tr><td data-v='2'>2</td><td data-v='GILD'><a href='https://www.tradingview.com/chart/?symbol=GILD' target='_blank' rel='noopener'><b>GILD</b></a><span class='nm'>Gilead Sciences</span></td><td data-v='Health Care'>Health Care</td><td data-v='151.1700'>151.17</td><td data-v='2.7668' class='up'>+2.77%</td><td data-v='-0.0970'>-0.10%</td><td data-v='2.5395'>2.5&times;</td><td data-v='147.7345'>147.73</td><td data-v='144.3285'>144.33</td><td data-v='134.1728'>134.17</td></tr><tr><td data-v='3'>3</td><td data-v='GWW'><a href='https://www.tradingview.com/chart/?symbol=GWW' target='_blank' rel='noopener'><b>GWW</b></a><span class='nm'>W. W. Grainger</span></td><td data-v='Industrials'>Industrials</td><td data-v='1289.7900'>1,289.79</td><td data-v='1.6647' class='up'>+1.66%</td><td data-v='-0.1051'>-0.11%</td><td data-v='1.7396'>1.7&times;</td><td data-v='1275.0413'>1,275.04</td><td data-v='1287.6387'>1,287.64</td><td data-v='1220.7709'>1,220.77</td></tr><tr><td data-v='4'>4</td><td data-v='BLK'><a href='https://www.tradingview.com/chart/?symbol=BLK' target='_blank' rel='noopener'><b>BLK</b></a><span class='nm'>BlackRock</span></td><td data-v='Financials'>Financials</td><td data-v='1082.3900'>1,082.39</td><td data-v='1.5995' class='up'>+1.60%</td><td data-v='-0.5816'>-0.58%</td><td data-v='1.5079'>1.5&times;</td><td data-v='1075.3421'>1,075.34</td><td data-v='1082.0310'>1,082.03</td><td data-v='1058.7891'>1,058.79</td></tr><tr><td data-v='5'>5</td><td data-v='BRK.B'><a href='https://www.tradingview.com/chart/?symbol=BRK-B' target='_blank' rel='noopener'><b>BRK.B</b></a><span class='nm'>Berkshire Hathaway</span></td><td data-v='Financials'>Financials</td><td data-v='515.6200'>515.62</td><td data-v='0.8942' class='up'>+0.89%</td><td data-v='0.8631'>+0.86%</td><td data-v='2.0348'>2.0&times;</td><td data-v='506.5868'>506.59</td><td data-v='504.9322'>504.93</td><td data-v='496.2368'>496.24</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="foot">End-of-day data from Yahoo Finance via yfinance, which is unofficial and can contain errors.
+  For information only, not investment advice.</p>
+</div>
+<script>
+(function () {
+  var t = document.getElementById('t'), tb = t.tBodies[0], dir = {};
+  Array.prototype.forEach.call(t.tHead.rows[0].cells, function (th, i) {
+    th.addEventListener('click', function () {
+      var asc = dir[i] = !dir[i];
+      var rows = Array.prototype.slice.call(tb.rows).filter(function (r) { return r.cells.length > 1; });
+      rows.sort(function (a, b) {
+        var x = a.cells[i].dataset.v, y = b.cells[i].dataset.v;
+        var nx = parseFloat(x), ny = parseFloat(y);
+        var r = (isNaN(nx) || isNaN(ny)) ? String(x).localeCompare(String(y)) : nx - ny;
+        return asc ? r : -r;
+      });
+      rows.forEach(function (r) { tb.appendChild(r); });
+    });
+  });
+})();
+</script>
+</body>
+</html>
