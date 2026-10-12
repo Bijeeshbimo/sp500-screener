@@ -37,6 +37,7 @@ MIN_LOOKBACK = 5            # smallest lookback offered on the page
 MIN_BARS = 30               # ignore tickers with less history than this
 HISTORY_PERIOD = "3y"       # allows lookbacks up to roughly 750 sessions
 ADV_WINDOW = 20             # sessions (before the signal day) for average volume
+SPARK_DAYS = 21             # sessions in the 1-month bar chart (about one trading month)
 MIN_TICKERS = 400           # refuse to publish if fewer tickers returned data
 
 OUT_PATH = Path(__file__).parent / "docs" / "index.html"
@@ -78,10 +79,16 @@ def breakout_stats(df: pd.DataFrame) -> dict | None:
     prior_vol = v[-1 - ADV_WINDOW:-1]
     prior_dollar = (c * v)[-1 - ADV_WINDOW:-1]
     mean_vol = float(prior_vol.mean())
+
+    # 1-month chart: return of each of the last SPARK_DAYS closes vs the close just before them
+    base = float(c[-1 - SPARK_DAYS])
+    spark = [round((float(x) / base - 1.0) * 100.0, 1) for x in c[-SPARK_DAYS:]]
     return {
         "date": df.index[-1].strftime("%Y-%m-%d"),
         "close": round(float(c[-1]), 2),
         "chg": round((float(c[-1]) / float(c[-2]) - 1.0) * 100.0, 2),
+        "m1": spark[-1],
+        "spark": spark,
         "rvol": round(float(v[-1]) / mean_vol, 2) if mean_vol > 0 else 0.0,
         "adv": int(prior_dollar.mean()),
         "n1": int(n1),
@@ -214,16 +221,16 @@ TEMPLATE = r"""<!doctype html>
 <style>
   :root {
     --bg:#fbfbf9; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e2dc; --card:#ffffff;
-    --up:#0f7b4d; --accent:#2b5fd9; --chip:#eeede7; --chipon:#2b5fd9; --chipfg:#ffffff;
+    --up:#0f7b4d; --down:#c23a2b; --accent:#2b5fd9; --chip:#eeede7; --chipon:#2b5fd9; --chipfg:#ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#141413; --fg:#ecebe6; --muted:#9a9990; --line:#2c2c29; --card:#1b1b19;
-            --up:#4cc38a; --accent:#7ba0ff; --chip:#262624; --chipon:#7ba0ff; --chipfg:#101010; }
+            --up:#4cc38a; --down:#ff7566; --accent:#7ba0ff; --chip:#262624; --chipon:#7ba0ff; --chipfg:#101010; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 48px; }
+  .wrap { max-width:1240px; margin:0 auto; padding:28px 16px 48px; }
   h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
   .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
@@ -247,7 +254,7 @@ TEMPLATE = r"""<!doctype html>
   .reset { float:right; background:none; border:0; color:var(--accent); font:inherit; font-size:13px; cursor:pointer; padding:0; }
   .tw { overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); }
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  th, td { padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); }
+  th, td { padding:9px 9px; text-align:right; border-bottom:1px solid var(--line); }
   th:nth-child(-n+4), td:nth-child(-n+4) { text-align:left; }
   th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); cursor:pointer; user-select:none; }
   th:first-child { cursor:default; }
@@ -256,6 +263,11 @@ TEMPLATE = r"""<!doctype html>
   td a { color:var(--accent); text-decoration:none; }
   .nm { display:block; color:var(--muted); font-size:12px; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
   .up { color:var(--up); font-weight:600; }
+  .dn { color:var(--down); font-weight:600; }
+  svg.spark { display:block; margin-left:auto; overflow:visible; }
+  svg.spark .pos { fill:var(--up); }
+  svg.spark .neg { fill:var(--down); }
+  svg.spark .zero { stroke:var(--line); stroke-width:1; }
   .empty { text-align:center !important; color:var(--muted); padding:28px; }
   .foot { color:var(--muted); font-size:12px; margin-top:16px; }
   .warn { color:#b3541e; }
@@ -293,6 +305,7 @@ TEMPLATE = r"""<!doctype html>
   <p class="foot" id="foot"></p>
   <p class="foot">End-of-day data from Yahoo Finance via yfinance (unofficial; split-adjusted, not dividend-adjusted).
   Avg daily $ volume = average of close &times; volume over the 20 sessions before the signal day.
+  The 1-month chart has one bar per session (21 sessions): each bar is the return of that day&rsquo;s close vs the close one month before the last bar, green above that level and red below it.
   For information only, not investment advice.</p>
 </div>
 
@@ -304,6 +317,8 @@ const PRESETS = [20, 50, 100, 150, 200, 252];
 const COLS = [
   {k: "sym", t: "Symbol"}, {k: "idxs", t: "Index"}, {k: "sector", t: "Sector"},
   {k: "close", t: "Close", num: 1}, {k: "chg", t: "Day %", num: 1},
+  {k: "m1", t: "1M %", num: 1, tip: "Return over the last ~21 trading sessions"},
+  {k: "spark", t: "1 month", chart: 1, tip: "Bars: return vs the close one month ago, one bar per session. Green = above, red = below."},
   {k: "rvol", t: "Rel vol", num: 1, tip: "Today's volume vs the average of the previous 20 sessions"},
   {k: "adv", t: "Avg $ vol", num: 1, tip: "Average daily dollar volume, previous 20 sessions"},
   {k: "n1", t: "Cleared", num: 1, tip: "Number of previous sessions whose highs today's close is above (the longest lookback it would pass)"}
@@ -364,6 +379,32 @@ function matches() {
 function cell(text, cls) {
   const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td;
 }
+const SVGNS = "http://www.w3.org/2000/svg";
+function sparkCell(vals, m1) {
+  const BW = 4, GAP = 1, H = 28, n = vals.length;
+  const top = Math.max(0, ...vals), bot = Math.min(0, ...vals), rng = (top - bot) || 1;
+  const y0 = top / rng * H;                       // zero line, placed so the whole range fits
+  const svg = document.createElementNS(SVGNS, "svg");
+  const w = n * (BW + GAP) - GAP;
+  svg.setAttribute("class", "spark"); svg.setAttribute("width", w); svg.setAttribute("height", H);
+  svg.setAttribute("viewBox", "0 0 " + w + " " + H); svg.setAttribute("role", "img");
+  const label = "1-month return " + (m1 >= 0 ? "+" : "") + m1.toFixed(1) + "%";
+  svg.setAttribute("aria-label", label);
+  const title = document.createElementNS(SVGNS, "title"); title.textContent = label; svg.appendChild(title);
+  const zl = document.createElementNS(SVGNS, "line");
+  zl.setAttribute("class", "zero"); zl.setAttribute("x1", 0); zl.setAttribute("x2", w);
+  zl.setAttribute("y1", y0); zl.setAttribute("y2", y0); svg.appendChild(zl);
+  vals.forEach((v, i) => {
+    const h = Math.max(Math.abs(v) / rng * H, 1);
+    const r = document.createElementNS(SVGNS, "rect");
+    const y = v >= 0 ? Math.max(y0 - h, 0) : y0;
+    r.setAttribute("class", v >= 0 ? "pos" : "neg");
+    r.setAttribute("x", i * (BW + GAP)); r.setAttribute("y", y);
+    r.setAttribute("width", BW); r.setAttribute("height", h);
+    svg.appendChild(r);
+  });
+  const td = document.createElement("td"); td.appendChild(svg); return td;
+}
 const fmt2 = x => x.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 function update() {
@@ -394,7 +435,8 @@ function update() {
     const th = document.createElement("th");
     th.textContent = col.t + (sort.k === col.k ? (sort.asc ? " ▲" : " ▼") : "");
     if (col.tip) th.title = col.tip;
-    th.addEventListener("click", () => {
+    if (col.chart) th.style.cursor = "default";
+    else th.addEventListener("click", () => {
       if (sort.k === col.k) sort.asc = !sort.asc; else { sort.k = col.k; sort.asc = !col.num; }
       update();
     });
@@ -420,6 +462,8 @@ function update() {
     tr.appendChild(cell(r.sector || "—"));
     tr.appendChild(cell(fmt2(r.close)));
     tr.appendChild(cell("+" + r.chg.toFixed(2) + "%", "up"));
+    tr.appendChild(cell((r.m1 >= 0 ? "+" : "") + r.m1.toFixed(1) + "%", r.m1 >= 0 ? "up" : "dn"));
+    tr.appendChild(sparkCell(r.spark, r.m1));
     tr.appendChild(cell(r.rvol.toFixed(1) + "×"));
     tr.appendChild(cell("$" + (r.adv / 1e6).toFixed(1) + "M"));
     tr.appendChild(cell((r.n1 >= r.bars ? "≥ " : "") + r.n1));
