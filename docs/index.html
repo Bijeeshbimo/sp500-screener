@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>S&amp;P 500 Screener</title>
+<title>US Breakout Screener</title>
 <style>
   :root {
     --bg:#fbfbf9; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e2dc; --card:#ffffff;
-    --up:#0f7b4d; --accent:#2b5fd9;
+    --up:#0f7b4d; --accent:#2b5fd9; --chip:#eeede7; --chipon:#2b5fd9; --chipfg:#ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#141413; --fg:#ecebe6; --muted:#9a9990; --line:#2c2c29; --card:#1b1b19;
-             --up:#4cc38a; --accent:#7ba0ff; }
+            --up:#4cc38a; --accent:#7ba0ff; --chip:#262624; --chipon:#7ba0ff; --chipfg:#101010; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
@@ -19,80 +19,208 @@
   .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 48px; }
   h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
-  .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
   .stat b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
   .stat span { color:var(--muted); font-size:12px; }
-  details { background:var(--card); border:1px solid var(--line); border-radius:10px;
-            padding:10px 14px; margin-bottom:18px; font-size:13.5px; }
-  summary { cursor:pointer; font-weight:600; }
-  details ol { margin:8px 0 0; padding-left:20px; color:var(--muted); }
+  .ctl { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  label { display:block; font-size:12px; color:var(--muted); }
+  input, select { width:100%; margin-top:4px; padding:7px 9px; font:inherit; color:var(--fg);
+                  background:var(--bg); border:1px solid var(--line); border-radius:7px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; align-items:center; }
+  .chips .lbl { font-size:12px; color:var(--muted); margin-right:2px; }
+  .chip { background:var(--chip); color:var(--fg); border:0; border-radius:999px; padding:4px 12px;
+          font:inherit; font-size:13px; cursor:pointer; }
+  .chip.on { background:var(--chipon); color:var(--chipfg); }
+  .chk { display:inline-flex; align-items:center; gap:6px; background:var(--chip); border-radius:999px;
+         padding:4px 12px; font-size:13px; color:var(--fg); cursor:pointer; margin:0; }
+  .chk input { width:auto; margin:0; }
+  .rule { color:var(--muted); font-size:13px; margin:12px 0 0; }
+  .reset { float:right; background:none; border:0; color:var(--accent); font:inherit; font-size:13px; cursor:pointer; padding:0; }
   .tw { overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); }
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
   th, td { padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); }
-  th:nth-child(-n+3), td:nth-child(-n+3) { text-align:left; }
-  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
-       cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); }
+  th:nth-child(-n+4), td:nth-child(-n+4) { text-align:left; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); cursor:pointer; user-select:none; }
+  th:first-child { cursor:default; }
   th:hover { color:var(--fg); }
   tr:last-child td { border-bottom:0; }
   td a { color:var(--accent); text-decoration:none; }
-  .nm { display:block; color:var(--muted); font-size:12px; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+  .nm { display:block; color:var(--muted); font-size:12px; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
   .up { color:var(--up); font-weight:600; }
   .empty { text-align:center !important; color:var(--muted); padding:28px; }
   .foot { color:var(--muted); font-size:12px; margin-top:16px; }
+  .warn { color:#b3541e; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>S&amp;P 500 Screener</h1>
-  <div class="sub">Session of 2026-10-09 &middot; refreshed 2026-10-11 16:39 UTC</div>
+  <h1>US Breakout Screener</h1>
+  <div class="sub" id="sub"></div>
 
   <div class="stats">
-    <div class="stat"><b>503</b><span>stocks scanned</span></div>
-    <div class="stat"><b>5</b><span>passed all filters</span></div>
-    <div class="stat"><b>5</b><span>shown (top 20 by daily change)</span></div>
+    <div class="stat"><b id="s-scanned">0</b><span>stocks scanned</span></div>
+    <div class="stat"><b id="s-match">0</b><span>match your settings</span></div>
+    <div class="stat"><b id="s-shown">0</b><span>shown</span></div>
   </div>
 
-  <details>
-    <summary>Criteria</summary>
-    <ol>
-      <li>Open within &plusmn;1% of the 20 EMA (EMA as of the prior close).</li>
-      <li>50 EMA above 200 EMA on each of the last 50 sessions.</li>
-      <li>Big bullish candle: close &gt; open, body &ge; 1.5&times; the average body of the prior 20 candles, and close above the highs of the prior 2 candles.</li>
-      <li>Daily change above 0% and no more than 15% (filters out extreme jumps).</li>
-    </ol>
-  </details>
+  <section class="ctl">
+    <button class="reset" id="reset" type="button">Reset</button>
+    <div class="grid">
+      <label>Lookback (sessions)<input id="n" type="number" inputmode="numeric" min="5" step="1"></label>
+      <label>Min avg daily $ volume (M)<input id="adv" type="number" inputmode="decimal" min="0" step="1"></label>
+      <label>Min price ($)<input id="px" type="number" inputmode="decimal" min="0" step="0.5"></label>
+      <label>Max day change (%)<input id="cap" type="number" inputmode="decimal" min="0" step="1" placeholder="no cap"></label>
+      <label>Show<select id="top">
+        <option value="20">Top 20</option><option value="50">Top 50</option>
+        <option value="100">Top 100</option><option value="0">All matches</option></select></label>
+    </div>
+    <div class="chips"><span class="lbl">Lookback presets</span><span id="presets"></span></div>
+    <div class="chips"><span class="lbl">Indices</span><span id="indices"></span></div>
+    <p class="rule" id="rule"></p>
+  </section>
 
-  <div class="tw">
-    <table id="t">
-      <thead><tr>
-        <th>#</th><th>Symbol</th><th>Sector</th><th>Close</th><th>Day %</th>
-        <th>Open vs 20 EMA</th><th>Body vs avg</th><th>20 EMA</th><th>50 EMA</th><th>200 EMA</th>
-      </tr></thead>
-      <tbody><tr><td data-v='1'>1</td><td data-v='ELV'><a href='https://www.tradingview.com/chart/?symbol=ELV' target='_blank' rel='noopener'><b>ELV</b></a><span class='nm'>Elevance Health</span></td><td data-v='Health Care'>Health Care</td><td data-v='412.7000'>412.70</td><td data-v='2.9331' class='up'>+2.93%</td><td data-v='0.7924'>+0.79%</td><td data-v='3.1084'>3.1&times;</td><td data-v='400.0878'>400.09</td><td data-v='398.2213'>398.22</td><td data-v='375.2667'>375.27</td></tr><tr><td data-v='2'>2</td><td data-v='GILD'><a href='https://www.tradingview.com/chart/?symbol=GILD' target='_blank' rel='noopener'><b>GILD</b></a><span class='nm'>Gilead Sciences</span></td><td data-v='Health Care'>Health Care</td><td data-v='151.1700'>151.17</td><td data-v='2.7668' class='up'>+2.77%</td><td data-v='-0.0970'>-0.10%</td><td data-v='2.5395'>2.5&times;</td><td data-v='147.7345'>147.73</td><td data-v='144.3285'>144.33</td><td data-v='134.1728'>134.17</td></tr><tr><td data-v='3'>3</td><td data-v='GWW'><a href='https://www.tradingview.com/chart/?symbol=GWW' target='_blank' rel='noopener'><b>GWW</b></a><span class='nm'>W. W. Grainger</span></td><td data-v='Industrials'>Industrials</td><td data-v='1289.7900'>1,289.79</td><td data-v='1.6647' class='up'>+1.66%</td><td data-v='-0.1051'>-0.11%</td><td data-v='1.7396'>1.7&times;</td><td data-v='1275.0413'>1,275.04</td><td data-v='1287.6387'>1,287.64</td><td data-v='1220.7709'>1,220.77</td></tr><tr><td data-v='4'>4</td><td data-v='BLK'><a href='https://www.tradingview.com/chart/?symbol=BLK' target='_blank' rel='noopener'><b>BLK</b></a><span class='nm'>BlackRock</span></td><td data-v='Financials'>Financials</td><td data-v='1082.3900'>1,082.39</td><td data-v='1.5995' class='up'>+1.60%</td><td data-v='-0.5816'>-0.58%</td><td data-v='1.5079'>1.5&times;</td><td data-v='1075.3421'>1,075.34</td><td data-v='1082.0310'>1,082.03</td><td data-v='1058.7891'>1,058.79</td></tr><tr><td data-v='5'>5</td><td data-v='BRK.B'><a href='https://www.tradingview.com/chart/?symbol=BRK-B' target='_blank' rel='noopener'><b>BRK.B</b></a><span class='nm'>Berkshire Hathaway</span></td><td data-v='Financials'>Financials</td><td data-v='515.6200'>515.62</td><td data-v='0.8942' class='up'>+0.89%</td><td data-v='0.8631'>+0.86%</td><td data-v='2.0348'>2.0&times;</td><td data-v='506.5868'>506.59</td><td data-v='504.9322'>504.93</td><td data-v='496.2368'>496.24</td></tr></tbody>
-    </table>
-  </div>
+  <div class="tw"><table id="t"><thead><tr id="hr"></tr></thead><tbody id="tb"></tbody></table></div>
 
-  <p class="foot">End-of-day data from Yahoo Finance via yfinance, which is unofficial and can contain errors.
+  <p class="foot" id="foot"></p>
+  <p class="foot">End-of-day data from Yahoo Finance via yfinance (unofficial; split-adjusted, not dividend-adjusted).
+  Avg daily $ volume = average of close &times; volume over the 20 sessions before the signal day.
   For information only, not investment advice.</p>
 </div>
+
 <script>
-(function () {
-  var t = document.getElementById('t'), tb = t.tBodies[0], dir = {};
-  Array.prototype.forEach.call(t.tHead.rows[0].cells, function (th, i) {
-    th.addEventListener('click', function () {
-      var asc = dir[i] = !dir[i];
-      var rows = Array.prototype.slice.call(tb.rows).filter(function (r) { return r.cells.length > 1; });
-      rows.sort(function (a, b) {
-        var x = a.cells[i].dataset.v, y = b.cells[i].dataset.v;
-        var nx = parseFloat(x), ny = parseFloat(y);
-        var r = (isNaN(nx) || isNaN(ny)) ? String(x).localeCompare(String(y)) : nx - ny;
-        return asc ? r : -r;
-      });
-      rows.forEach(function (r) { tb.appendChild(r); });
-    });
+const DATA = {"rows":[{"close":165.87,"chg":1.62,"rvol":0.43,"adv":757396709,"n1":12,"n2":2,"bars":752,"sym":"ABNB","name":"Airbnb","sector":"Consumer Discretionary","idx":["SPX"]},{"close":262.43,"chg":3.29,"rvol":0.95,"adv":9232864983,"n1":27,"n2":0,"bars":752,"sym":"AMZN","name":"Amazon","sector":"Consumer Discretionary","idx":["SPX"]},{"close":182.24,"chg":9.3,"rvol":2.99,"adv":483843408,"n1":78,"n2":6,"bars":752,"sym":"AMT","name":"American Tower","sector":"Real Estate","idx":["SPX"]},{"close":118.65,"chg":2.91,"rvol":1.12,"adv":377042454,"n1":6,"n2":0,"bars":752,"sym":"APO","name":"Apollo Global Management","sector":"Financials","idx":["SPX"]},{"close":2939.85,"chg":1.01,"rvol":0.38,"adv":1090117611,"n1":12,"n2":7,"bars":752,"sym":"AZO","name":"AutoZone","sector":"Consumer Discretionary","idx":["SPX"]},{"close":77.24,"chg":2.67,"rvol":1.26,"adv":315954129,"n1":12,"n2":0,"bars":752,"sym":"XYZ","name":"Block, Inc.","sector":"Financials","idx":["SPX"]},{"close":304.16,"chg":3.43,"rvol":1.18,"adv":332415511,"n1":25,"n2":22,"bars":752,"sym":"CBOE","name":"Cboe Global Markets","sector":"Financials","idx":["SPX"]},{"close":449.77,"chg":5.6,"rvol":1.31,"adv":1077555647,"n1":37,"n2":0,"bars":752,"sym":"CIEN","name":"Ciena","sector":"Information Technology","idx":["SPX"]},{"close":79.64,"chg":15.6,"rvol":3.8,"adv":265818048,"n1":50,"n2":0,"bars":752,"sym":"CCI","name":"Crown Castle","sector":"Real Estate","idx":["SPX"]},{"close":293.26,"chg":7.11,"rvol":1.24,"adv":761482116,"n1":752,"n2":1,"bars":752,"sym":"DDOG","name":"Datadog","sector":"Information Technology","idx":["SPX"]},{"close":127.23,"chg":2.38,"rvol":0.75,"adv":290947767,"n1":17,"n2":7,"bars":752,"sym":"DG","name":"Dollar General","sector":"Consumer Staples","idx":["SPX"]},{"close":196.5,"chg":2.5,"rvol":0.57,"adv":774922329,"n1":12,"n2":1,"bars":752,"sym":"DASH","name":"DoorDash","sector":"Consumer Discretionary","idx":["SPX"]},{"close":55.3,"chg":1.84,"rvol":0.93,"adv":281902851,"n1":12,"n2":0,"bars":752,"sym":"EIX","name":"Edison International","sector":"Utilities","idx":["SPX"]},{"close":412.7,"chg":2.93,"rvol":1.79,"adv":469010628,"n1":12,"n2":0,"bars":752,"sym":"ELV","name":"Elevance Health","sector":"Health Care","idx":["SPX"]},{"close":98.05,"chg":3.95,"rvol":0.92,"adv":275439038,"n1":10,"n2":0,"bars":752,"sym":"EL","name":"Est\u00e9e Lauder Companies (The)","sector":"Consumer Staples","idx":["SPX"]},{"close":479.83,"chg":3.94,"rvol":0.89,"adv":249930645,"n1":752,"n2":0,"bars":752,"sym":"FFIV","name":"F5, Inc.","sector":"Information Technology","idx":["SPX"]},{"close":194.75,"chg":2.99,"rvol":0.5,"adv":726327939,"n1":752,"n2":0,"bars":752,"sym":"FTNT","name":"Fortinet","sector":"Information Technology","idx":["SPX"]},{"close":73.69,"chg":3.58,"rvol":0.64,"adv":782861617,"n1":6,"n2":0,"bars":752,"sym":"FCX","name":"Freeport-McMoRan","sector":"Materials","idx":["SPX"]},{"close":23.25,"chg":2.2,"rvol":0.55,"adv":322580867,"n1":10,"n2":1,"bars":752,"sym":"GEN","name":"Gen Digital","sector":"Information Technology","idx":["SPX"]},{"close":151.17,"chg":2.77,"rvol":1.01,"adv":855181713,"n1":6,"n2":4,"bars":752,"sym":"GILD","name":"Gilead Sciences","sector":"Health Care","idx":["SPX"]},{"close":73.46,"chg":3.46,"rvol":0.61,"adv":1384950903,"n1":752,"n2":0,"bars":752,"sym":"HPE","name":"Hewlett Packard Enterprise","sector":"Information Technology","idx":["SPX"]},{"close":326.56,"chg":1.01,"rvol":0.72,"adv":498062316,"n1":28,"n2":6,"bars":752,"sym":"HLT","name":"Hilton Worldwide","sector":"Consumer Discretionary","idx":["SPX"]},{"close":431.87,"chg":11.56,"rvol":3.9,"adv":499507006,"n1":684,"n2":0,"bars":752,"sym":"HUM","name":"Humana","sector":"Health Care","idx":["SPX"]},{"close":26.79,"chg":1.17,"rvol":0.76,"adv":159592380,"n1":10,"n2":6,"bars":752,"sym":"INVH","name":"Invitation Homes","sector":"Real Estate","idx":["SPX"]},{"close":261.44,"chg":1.93,"rvol":0.85,"adv":1791071215,"n1":5,"n2":0,"bars":752,"sym":"JNJ","name":"Johnson & Johnson","sector":"Health Care","idx":["SPX"]},{"close":31.76,"chg":1.6,"rvol":0.77,"adv":349856161,"n1":9,"n2":7,"bars":752,"sym":"KDP","name":"Keurig Dr Pepper","sector":"Consumer Staples","idx":["SPX"]},{"close":365.88,"chg":1.33,"rvol":0.56,"adv":517301232,"n1":48,"n2":1,"bars":752,"sym":"MAR","name":"Marriott International","sector":"Consumer Discretionary","idx":["SPX"]},{"close":589.14,"chg":2.5,"rvol":0.85,"adv":1602145935,"n1":24,"n2":22,"bars":752,"sym":"MA","name":"Mastercard","sector":"Financials","idx":["SPX"]},{"close":145.6,"chg":2.26,"rvol":0.94,"adv":1439678449,"n1":6,"n2":0,"bars":752,"sym":"MRK","name":"Merck & Co.","sector":"Health Care","idx":["SPX"]},{"close":225.0,"chg":14.21,"rvol":1.7,"adv":3080335387,"n1":752,"n2":2,"bars":752,"sym":"MRNA","name":"Moderna","sector":"Health Care","idx":["SPX"]},{"close":464.23,"chg":1.21,"rvol":0.7,"adv":386325884,"n1":9,"n2":7,"bars":752,"sym":"MCO","name":"Moody's Corporation","sector":"Financials","idx":["SPX"]},{"close":117.84,"chg":1.98,"rvol":0.79,"adv":738298678,"n1":6,"n2":1,"bars":752,"sym":"NEM","name":"Newmont","sector":"Materials","idx":["SPX"]},{"close":209.05,"chg":5.17,"rvol":1.63,"adv":4245326548,"n1":752,"n2":232,"bars":752,"sym":"PLTR","name":"Palantir Technologies","sector":"Information Technology","idx":["SPX"]},{"close":28.28,"chg":1.65,"rvol":0.7,"adv":932072710,"n1":5,"n2":0,"bars":752,"sym":"PFE","name":"Pfizer","sector":"Health Care","idx":["SPX"]},{"close":13.13,"chg":3.63,"rvol":1.36,"adv":482804353,"n1":12,"n2":0,"bars":752,"sym":"PCG","name":"PG&E Corporation","sector":"Utilities","idx":["SPX"]},{"close":98.92,"chg":0.96,"rvol":1.0,"adv":129334053,"n1":30,"n2":1,"bars":752,"sym":"PNW","name":"Pinnacle West Capital","sector":"Utilities","idx":["SPX"]},{"close":289.86,"chg":1.52,"rvol":1.06,"adv":269651274,"n1":11,"n2":1,"bars":752,"sym":"PSA","name":"Public Storage","sector":"Real Estate","idx":["SPX"]},{"close":371.28,"chg":1.06,"rvol":0.6,"adv":215429399,"n1":31,"n2":1,"bars":752,"sym":"RL","name":"Ralph Lauren Corporation","sector":"Consumer Discretionary","idx":["SPX"]},{"close":185.97,"chg":0.9,"rvol":0.81,"adv":784033396,"n1":5,"n2":2,"bars":752,"sym":"RTX","name":"RTX Corporation","sector":"Industrials","idx":["SPX"]},{"close":230.05,"chg":1.46,"rvol":0.84,"adv":261050040,"n1":17,"n2":14,"bars":752,"sym":"RMD","name":"ResMed|","sector":"Health Care","idx":["SPX"]},{"close":407.82,"chg":1.26,"rvol":0.72,"adv":765130879,"n1":10,"n2":8,"bars":752,"sym":"SPGI","name":"S&P Global","sector":"Financials","idx":["SPX"]},{"close":182.49,"chg":7.34,"rvol":2.45,"adv":164797099,"n1":15,"n2":0,"bars":752,"sym":"SBAC","name":"SBA Communications","sector":"Real Estate","idx":["SPX"]},{"close":214.4,"chg":1.73,"rvol":0.86,"adv":144648027,"n1":18,"n2":2,"bars":752,"sym":"STE","name":"Steris","sector":"Health Care","idx":["SPX"]},{"close":213.44,"chg":1.94,"rvol":0.79,"adv":507348762,"n1":15,"n2":12,"bars":752,"sym":"TTWO","name":"Take-Two Interactive","sector":"Communication Services","idx":["SPX"]},{"close":53.43,"chg":2.08,"rvol":0.99,"adv":182232344,"n1":18,"n2":13,"bars":752,"sym":"TSN","name":"Tyson Foods","sector":"Consumer Staples","idx":["SPX"]},{"close":570.37,"chg":1.09,"rvol":0.86,"adv":244982051,"n1":117,"n2":42,"bars":752,"sym":"ULTA","name":"Ulta Beauty","sector":"Consumer Discretionary","idx":["SPX"]},{"close":296.13,"chg":3.96,"rvol":1.22,"adv":409292528,"n1":29,"n2":5,"bars":752,"sym":"VEEV","name":"Veeva Systems","sector":"Health Care","idx":["SPX"]},{"close":385.45,"chg":2.76,"rvol":0.96,"adv":2274526882,"n1":30,"n2":16,"bars":752,"sym":"V","name":"Visa Inc.","sector":"Financials","idx":["SPX"]},{"close":61.16,"chg":1.97,"rvol":0.62,"adv":374647262,"n1":6,"n2":1,"bars":752,"sym":"VMRK","name":"Vivmark Residential","sector":"Real Estate","idx":["SPX"]},{"close":83.55,"chg":1.85,"rvol":1.57,"adv":1190163428,"n1":12,"n2":8,"bars":752,"sym":"WFC","name":"Wells Fargo","sector":"Financials","idx":["SPX"]},{"close":73.78,"chg":0.57,"rvol":0.83,"adv":436263615,"n1":17,"n2":14,"bars":752,"sym":"XEL","name":"Xcel Energy","sector":"Utilities","idx":["SPX"]},{"close":74.81,"chg":2.37,"rvol":0.64,"adv":324374294,"n1":18,"n2":16,"bars":752,"sym":"ZTS","name":"Zoetis","sector":"Health Care","idx":["SPX"]},{"close":30.85,"chg":1.18,"rvol":0.75,"adv":107665689,"n1":6,"n2":4,"bars":752,"sym":"AMH","name":"American Homes 4 Rent","sector":"Real Estate","idx":["MID"]},{"close":73.94,"chg":1.47,"rvol":0.65,"adv":132761376,"n1":10,"n2":8,"bars":752,"sym":"BAH","name":"Booz Allen Hamilton","sector":"Industrials","idx":["MID"]},{"close":47.76,"chg":3.15,"rvol":0.68,"adv":181677283,"n1":17,"n2":15,"bars":752,"sym":"CART","name":"Maplebear Inc.","sector":"Consumer Staples","idx":["MID"]},{"close":28.58,"chg":4.31,"rvol":0.75,"adv":188397830,"n1":8,"n2":2,"bars":752,"sym":"CELH","name":"Celsius Holdings","sector":"Consumer Staples","idx":["MID"]},{"close":79.96,"chg":4.99,"rvol":1.42,"adv":102407578,"n1":9,"n2":1,"bars":752,"sym":"CHDN","name":"Churchill Downs Inc.","sector":"Consumer Discretionary","idx":["MID"]},{"close":12.98,"chg":6.48,"rvol":1.57,"adv":189206305,"n1":15,"n2":1,"bars":752,"sym":"CLF","name":"Cleveland-Cliffs","sector":"Materials","idx":["MID"]},{"close":50.45,"chg":4.71,"rvol":0.76,"adv":27000875,"n1":18,"n2":1,"bars":752,"sym":"CXT","name":"Crane NXT","sector":"Information Technology","idx":["MID"]},{"close":63.5,"chg":3.89,"rvol":1.2,"adv":400426852,"n1":752,"n2":409,"bars":752,"sym":"DT","name":"Dynatrace","sector":"Information Technology","idx":["MID"]},{"close":30.92,"chg":10.19,"rvol":1.62,"adv":285149923,"n1":6,"n2":0,"bars":752,"sym":"HIMS","name":"Hims & Hers Health","sector":"Health Care","idx":["MID"]},{"close":529.14,"chg":2.11,"rvol":1.08,"adv":118711600,"n1":14,"n2":7,"bars":752,"sym":"MUSA","name":"Murphy USA","sector":"Consumer Discretionary","idx":["MID"]},{"close":74.63,"chg":2.08,"rvol":0.81,"adv":181517503,"n1":253,"n2":0,"bars":752,"sym":"NTNX","name":"Nutanix","sector":"Information Technology","idx":["MID"]},{"close":46.5,"chg":0.85,"rvol":0.77,"adv":91853226,"n1":18,"n2":14,"bars":752,"sym":"OGE","name":"OGE Energy","sector":"Utilities","idx":["MID"]},{"close":13.48,"chg":1.74,"rvol":0.6,"adv":571043041,"n1":12,"n2":4,"bars":752,"sym":"PATH","name":"UiPath","sector":"Information Technology","idx":["MID"]},{"close":319.4,"chg":0.59,"rvol":1.37,"adv":129421388,"n1":9,"n2":3,"bars":752,"sym":"PEN","name":"Penumbra, Inc.","sector":"Health Care","idx":["MID"]},{"close":45.08,"chg":4.79,"rvol":0.94,"adv":54486797,"n1":12,"n2":8,"bars":752,"sym":"PSN","name":"Parsons Corporation","sector":"Industrials","idx":["MID"]},{"close":134.66,"chg":3.82,"rvol":1.49,"adv":57192324,"n1":10,"n2":7,"bars":752,"sym":"SAIC","name":"Science Applications Intl Corp","sector":"Industrials","idx":["MID"]},{"close":114.0,"chg":1.97,"rvol":0.94,"adv":135402532,"n1":11,"n2":1,"bars":752,"sym":"SUI","name":"Sun Communities","sector":"Real Estate","idx":["MID"]},{"close":31.31,"chg":2.55,"rvol":0.67,"adv":262482653,"n1":15,"n2":0,"bars":752,"sym":"TOST","name":"Toast, Inc.","sector":"Financials","idx":["MID"]},{"close":147.18,"chg":0.46,"rvol":0.59,"adv":104365017,"n1":752,"n2":2,"bars":752,"sym":"ACA","name":"Arcosa, Inc.","sector":"Industrials","idx":["SML"]},{"close":26.62,"chg":3.14,"rvol":0.78,"adv":13988240,"n1":6,"n2":1,"bars":752,"sym":"AMPH","name":"Amphstar Pharmaceuticals, Inc.","sector":"Health Care","idx":["SML"]},{"close":181.57,"chg":4.18,"rvol":0.72,"adv":55758732,"n1":11,"n2":1,"bars":752,"sym":"AMR","name":"Alpha Metallurgical Resources, Inc.","sector":"Materials","idx":["SML"]},{"close":73.89,"chg":2.65,"rvol":1.24,"adv":32363287,"n1":5,"n2":2,"bars":752,"sym":"ANIP","name":"ANI Pharmaceuticals, Inc.","sector":"Health Care","idx":["SML"]},{"close":29.63,"chg":5.97,"rvol":0.81,"adv":32814405,"n1":44,"n2":0,"bars":752,"sym":"ATEN","name":"A10 Networks, Inc.","sector":"Information Technology","idx":["SML"]},{"close":44.16,"chg":1.96,"rvol":0.67,"adv":20685390,"n1":30,"n2":0,"bars":752,"sym":"BKE","name":"The Buckle, Inc.","sector":"Consumer Discretionary","idx":["SML"]},{"close":131.38,"chg":2.91,"rvol":1.25,"adv":53478151,"n1":9,"n2":3,"bars":752,"sym":"BMI","name":"Badger Meter, Inc.","sector":"Information Technology","idx":["SML"]},{"close":57.46,"chg":3.83,"rvol":0.96,"adv":57012705,"n1":29,"n2":0,"bars":752,"sym":"CBRL","name":"Cracker Barrel","sector":"Consumer Discretionary","idx":["SML"]},{"close":5.52,"chg":1.85,"rvol":0.93,"adv":15510014,"n1":12,"n2":10,"bars":752,"sym":"CXM","name":"Sprinklr, Inc.","sector":"Information Technology","idx":["SML"]},{"close":37.5,"chg":4.37,"rvol":0.63,"adv":25202510,"n1":5,"n2":1,"bars":752,"sym":"EFOR","name":"Everforth Inc.","sector":"Information Technology","idx":["SML"]},{"close":31.96,"chg":2.53,"rvol":1.33,"adv":20950218,"n1":17,"n2":14,"bars":752,"sym":"EZPW","name":"EZCORP, Inc.","sector":"Financials","idx":["SML"]},{"close":21.21,"chg":1.63,"rvol":0.49,"adv":21709496,"n1":5,"n2":0,"bars":752,"sym":"INVA","name":"Innoviva, Inc.","sector":"Health Care","idx":["SML"]},{"close":12.42,"chg":2.99,"rvol":0.34,"adv":65306586,"n1":11,"n2":0,"bars":752,"sym":"LFST","name":"Lifestance Health","sector":"Health Care","idx":["SML"]},{"close":85.59,"chg":5.2,"rvol":1.09,"adv":55338377,"n1":23,"n2":15,"bars":752,"sym":"LRN","name":"Stride, Inc.","sector":"Consumer Discretionary","idx":["SML"]},{"close":13.81,"chg":0.44,"rvol":1.53,"adv":29300573,"n1":379,"n2":0,"bars":752,"sym":"OGN","name":"Organon & Co.","sector":"Health Care","idx":["SML"]},{"close":38.3,"chg":2.41,"rvol":0.95,"adv":8800578,"n1":23,"n2":0,"bars":752,"sym":"PAHC","name":"Phibro Animal Health","sector":"Health Care","idx":["SML"]},{"close":76.28,"chg":6.58,"rvol":1.64,"adv":224449454,"n1":60,"n2":0,"bars":752,"sym":"PENG","name":"Penguin Solutions, Inc.","sector":"Information Technology","idx":["SML"]},{"close":15.06,"chg":3.86,"rvol":1.55,"adv":40222829,"n1":6,"n2":0,"bars":752,"sym":"PRGO","name":"Perrigo","sector":"Health Care","idx":["SML"]},{"close":5.12,"chg":4.07,"rvol":0.81,"adv":43049541,"n1":12,"n2":2,"bars":752,"sym":"PTON","name":"Peloton Interactive, Inc.","sector":"Consumer Discretionary","idx":["SML"]},{"close":13.42,"chg":8.14,"rvol":1.87,"adv":21491282,"n1":22,"n2":1,"bars":752,"sym":"QDEL","name":"QuidelOrtho","sector":"Health Care","idx":["SML"]},{"close":128.64,"chg":9.74,"rvol":1.32,"adv":56951186,"n1":28,"n2":15,"bars":752,"sym":"SEZL","name":"Sezzle","sector":"Financials","idx":["SML"]},{"close":55.37,"chg":3.81,"rvol":0.85,"adv":105706017,"n1":5,"n2":2,"bars":752,"sym":"TGTX","name":"TG Therapeutics, Inc.","sector":"Health Care","idx":["SML"]},{"close":62.45,"chg":2.01,"rvol":0.39,"adv":28675048,"n1":11,"n2":1,"bars":752,"sym":"WOR","name":"Worthington Enterprises","sector":"Industrials","idx":["SML"]}],"meta":{"date":"2026-10-09","generated":"2026-10-12 05:27 UTC","scanned":1497,"minLookback":5,"indices":[{"code":"SPX","label":"S&P 500","count":503},{"code":"MID","label":"S&P 400","count":400},{"code":"SML","label":"S&P 600","count":603}],"failed":["Nasdaq-100"]}};
+const ROWS = DATA.rows, META = DATA.meta;
+const DEF = {n: 200, adv: 10, px: 5, cap: 15, top: 20};
+const PRESETS = [20, 50, 100, 150, 200, 252];
+const COLS = [
+  {k: "sym", t: "Symbol"}, {k: "idxs", t: "Index"}, {k: "sector", t: "Sector"},
+  {k: "close", t: "Close", num: 1}, {k: "chg", t: "Day %", num: 1},
+  {k: "rvol", t: "Rel vol", num: 1, tip: "Today's volume vs the average of the previous 20 sessions"},
+  {k: "adv", t: "Avg $ vol", num: 1, tip: "Average daily dollar volume, previous 20 sessions"},
+  {k: "n1", t: "Cleared", num: 1, tip: "Number of previous sessions whose highs today's close is above (the longest lookback it would pass)"}
+];
+const $ = id => document.getElementById(id);
+const sort = {k: "chg", asc: false};
+
+for (const r of ROWS) r.idxs = r.idx.join(" ");
+
+function setDefaults() {
+  $("n").value = DEF.n; $("adv").value = DEF.adv; $("px").value = DEF.px;
+  $("cap").value = DEF.cap; $("top").value = DEF.top;
+  document.querySelectorAll(".idx").forEach(e => e.checked = true);
+}
+
+function buildStatic() {
+  $("sub").textContent = "Session of " + META.date + " · refreshed " + META.generated;
+  $("s-scanned").textContent = META.scanned.toLocaleString("en-US");
+  const pre = $("presets");
+  for (const n of PRESETS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = n; b.dataset.n = n;
+    b.addEventListener("click", () => { $("n").value = n; update(); });
+    pre.appendChild(b);
+  }
+  const box = $("indices");
+  for (const ix of META.indices) {
+    const l = document.createElement("label"); l.className = "chk";
+    const c = document.createElement("input"); c.type = "checkbox"; c.className = "idx"; c.value = ix.code; c.checked = true;
+    c.addEventListener("change", update);
+    l.appendChild(c); l.appendChild(document.createTextNode(ix.label + " (" + ix.count + ")"));
+    box.appendChild(l);
+  }
+  let foot = "Universe: " + META.indices.map(i => i.label).join(", ") + ".";
+  $("foot").textContent = foot;
+  if (META.failed.length) {
+    const w = document.createElement("span"); w.className = "warn";
+    w.textContent = " Not loaded on this run: " + META.failed.join(", ") + ".";
+    $("foot").appendChild(w);
+  }
+  for (const id of ["n", "adv", "px", "cap"]) $(id).addEventListener("input", update);
+  $("top").addEventListener("change", update);
+  $("reset").addEventListener("click", () => { setDefaults(); update(); });
+}
+
+function matches() {
+  const N = parseInt($("n").value, 10);
+  if (!(N >= META.minLookback)) return null;
+  const minAdv = (parseFloat($("adv").value) || 0) * 1e6;
+  const minPx = parseFloat($("px").value) || 0;
+  const capRaw = $("cap").value.trim();
+  const cap = capRaw === "" || isNaN(parseFloat(capRaw)) ? Infinity : parseFloat(capRaw);
+  const sel = new Set([...document.querySelectorAll(".idx:checked")].map(e => e.value));
+  return ROWS.filter(r => N > r.n2 + 1 && N <= r.n1 && r.adv >= minAdv && r.close >= minPx
+                          && r.chg <= cap && r.idx.some(i => sel.has(i)));
+}
+
+function cell(text, cls) {
+  const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td;
+}
+const fmt2 = x => x.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+function update() {
+  const N = parseInt($("n").value, 10);
+  document.querySelectorAll("#presets .chip").forEach(b => b.classList.toggle("on", +b.dataset.n === N));
+  $("rule").textContent = N >= META.minLookback
+    ? "Close is above the highest high of the previous " + N + " sessions, and yesterday’s close was not itself the highest close of its " + N + " sessions."
+    : "Enter a lookback of at least " + META.minLookback + " sessions.";
+
+  let list = matches();
+  const matched = list ? list.length : 0;
+  list = list ? list.slice() : [];
+  const c = COLS.find(x => x.k === sort.k);
+  list.sort((a, b) => {
+    const x = a[sort.k], y = b[sort.k];
+    const r = c.num ? x - y : String(x).localeCompare(String(y));
+    return sort.asc ? r : -r;
   });
-})();
+  const top = parseInt($("top").value, 10);
+  if (top > 0) list = list.slice(0, top);
+
+  $("s-match").textContent = matched.toLocaleString("en-US");
+  $("s-shown").textContent = list.length.toLocaleString("en-US");
+
+  const hr = $("hr"); hr.replaceChildren();
+  const th0 = document.createElement("th"); th0.textContent = "#"; hr.appendChild(th0);
+  for (const col of COLS) {
+    const th = document.createElement("th");
+    th.textContent = col.t + (sort.k === col.k ? (sort.asc ? " ▲" : " ▼") : "");
+    if (col.tip) th.title = col.tip;
+    th.addEventListener("click", () => {
+      if (sort.k === col.k) sort.asc = !sort.asc; else { sort.k = col.k; sort.asc = !col.num; }
+      update();
+    });
+    hr.appendChild(th);
+  }
+
+  const tb = $("tb"); tb.replaceChildren();
+  if (!list.length) {
+    const tr = document.createElement("tr"); const td = cell("No stocks match these settings. Try a shorter lookback or relax the liquidity filter.", "empty");
+    td.colSpan = COLS.length + 1; tr.appendChild(td); tb.appendChild(tr); return;
+  }
+  list.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    tr.appendChild(cell(i + 1));
+    const s = document.createElement("td");
+    const a = document.createElement("a");
+    a.href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(r.sym);
+    a.target = "_blank"; a.rel = "noopener";
+    const b = document.createElement("b"); b.textContent = r.sym; a.appendChild(b);
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = r.name;
+    s.appendChild(a); s.appendChild(nm); tr.appendChild(s);
+    tr.appendChild(cell(r.idxs.replaceAll(" ", " · ")));
+    tr.appendChild(cell(r.sector || "—"));
+    tr.appendChild(cell(fmt2(r.close)));
+    tr.appendChild(cell("+" + r.chg.toFixed(2) + "%", "up"));
+    tr.appendChild(cell(r.rvol.toFixed(1) + "×"));
+    tr.appendChild(cell("$" + (r.adv / 1e6).toFixed(1) + "M"));
+    tr.appendChild(cell((r.n1 >= r.bars ? "≥ " : "") + r.n1));
+    tb.appendChild(tr);
+  });
+}
+
+buildStatic(); setDefaults(); update();
 </script>
 </body>
 </html>
