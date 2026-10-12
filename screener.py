@@ -38,6 +38,9 @@ MIN_BARS = 30               # ignore tickers with less history than this
 HISTORY_PERIOD = "3y"       # allows lookbacks up to roughly 750 sessions
 ADV_WINDOW = 20             # sessions (before the signal day) for average volume
 SPARK_DAYS = 21             # sessions in the 1-month bar chart (about one trading month)
+RSI_PERIOD = 14             # Wilder RSI length
+EMA_FAST = 20               # EMA used for the "extension" measure
+RS_LOOKBACK = 126          # sessions (about 6 months) for the relative-strength rank
 MIN_TICKERS = 400           # refuse to publish if fewer tickers returned data
 
 OUT_PATH = Path(__file__).parent / "docs" / "index.html"
@@ -47,11 +50,56 @@ SOURCES = [
     ("SPX", "S&P 500", "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", 400),
     ("MID", "S&P 400", "https://en.wikipedia.org/wiki/List_of_S%26P_400_companies", 300),
     ("SML", "S&P 600", "https://en.wikipedia.org/wiki/List_of_S%26P_600_companies", 450),
-    ("NDX", "Nasdaq-100", "https://en.wikipedia.org/wiki/Nasdaq-100", 80),
+    # Wikipedia's Nasdaq-100 article no longer carries a constituents table, so use stockanalysis.com
+    ("NDX", "Nasdaq-100", "https://stockanalysis.com/list/nasdaq-100-stocks/", 80),
 ]
+
+# Used only if the live Nasdaq-100 source cannot be loaded, so the index never silently disappears.
+# Snapshot of 2026-10-12; membership changes a few times a year, so treat it as approximate.
+NASDAQ100_FALLBACK_DATE = "2026-10-12"
+NASDAQ100_FALLBACK = (
+    "NVDA AAPL GOOGL GOOG MSFT AMZN SPCX META AVGO TSLA MU AMD WMT ASML INTC PLTR CSCO COST AMAT LRCX "
+    "PANW NFLX ARM CRWD TXN KLAC MRVL SNDK AMGN LIN SHOP ADI GILD QCOM STX PEP TMUS ISRG WDC FTNT VRTX "
+    "BKNG PDD ADP CEG DDOG SBUX LITE ABNB SNPS CDNS MELI MAR ADBE APP CSX MNST DASH INTU CTAS MDLZ REGN "
+    "CMCSA ROST ORLY MPWR AEP HON TER NBIS ALAB MSTR FAST NXPI PCAR BKR FANG HONA ADSK PYPL XEL CCEP "
+    "CRWV WDAY TRI KDP EXC MCHP RKLB IDXX TTWO ODFL PAYX FER ROP AXON DXCM ALNY GEHC CPRT"
+).split()
 
 
 # ------------------------------------------------------------------ logic ---
+def rsi_wilder(close, period: int = RSI_PERIOD) -> float | None:
+    """Wilder's RSI at the last bar: first averages are simple means of the first `period`
+    changes, then Wilder smoothing (the textbook method used by charting platforms)."""
+    c = np.asarray(close, dtype=float)
+    if len(c) <= period:
+        return None
+    d = np.diff(c)
+    gain, loss = np.where(d > 0, d, 0.0), np.where(d < 0, -d, 0.0)
+    avg_g, avg_l = gain[:period].mean(), loss[:period].mean()
+    for g, l in zip(gain[period:], loss[period:]):
+        avg_g = (avg_g * (period - 1) + g) / period
+        avg_l = (avg_l * (period - 1) + l) / period
+    if avg_l == 0:
+        return 100.0 if avg_g > 0 else 50.0
+    return float(100.0 - 100.0 / (1.0 + avg_g / avg_l))
+
+
+def six_month_return(df: pd.DataFrame) -> float | None:
+    """Return over the last RS_LOOKBACK sessions, or None if there is not enough history."""
+    c = df["Close"].to_numpy(dtype=float)
+    if len(c) <= RS_LOOKBACK or c[-1 - RS_LOOKBACK] <= 0:
+        return None
+    return float(c[-1] / c[-1 - RS_LOOKBACK] - 1.0)
+
+
+def rs_ranks(returns: dict[str, float]) -> dict[str, int]:
+    """Percentile rank 0-99 of each stock's return among all stocks given (99 = strongest)."""
+    if len(returns) < 2:
+        return {}
+    r = pd.Series(returns).rank(method="average")
+    return {k: int(round((v - 1) / (len(r) - 1) * 99)) for k, v in r.items()}
+
+
 def breakout_stats(df: pd.DataFrame) -> dict | None:
     """Reduce one stock's daily bars (ascending dates; columns Open/High/Low/Close/Volume)
     to the numbers the page needs. Returns None if the stock cannot match for any
@@ -83,12 +131,16 @@ def breakout_stats(df: pd.DataFrame) -> dict | None:
     # 1-month chart: return of each of the last SPARK_DAYS closes vs the close just before them
     base = float(c[-1 - SPARK_DAYS])
     spark = [round((float(x) / base - 1.0) * 100.0, 1) for x in c[-SPARK_DAYS:]]
+    ema_fast = float(pd.Series(c).ewm(span=EMA_FAST, adjust=False).mean().iloc[-1])
+    rsi = rsi_wilder(c)
     return {
         "date": df.index[-1].strftime("%Y-%m-%d"),
         "close": round(float(c[-1]), 2),
         "chg": round((float(c[-1]) / float(c[-2]) - 1.0) * 100.0, 2),
         "m1": spark[-1],
         "spark": spark,
+        "rsi": round(rsi, 1) if rsi is not None else None,
+        "ext20": round((float(c[-1]) / ema_fast - 1.0) * 100.0, 1),
         "rvol": round(float(v[-1]) / mean_vol, 2) if mean_vol > 0 else 0.0,
         "adv": int(prior_dollar.mean()),
         "n1": int(n1),
@@ -150,6 +202,17 @@ def load_constituents() -> tuple[pd.DataFrame, dict]:
             loaded[code] = {"label": label, "count": int(len(df))}
         except Exception as e:  # one failing list should not sink the whole run
             print(f"WARNING: could not load {label}: {e}", file=sys.stderr)
+            if code == "NDX":
+                syms = list(dict.fromkeys(NASDAQ100_FALLBACK))
+                frames.append(pd.DataFrame({
+                    "symbol": syms, "name": syms, "sector": "",
+                    "yf": [x.replace(".", "-") for x in syms], "idx": code}))
+                loaded[code] = {
+                    "label": label, "count": len(syms),
+                    "note": f"{label} could not be loaded live, so a built-in list dated "
+                            f"{NASDAQ100_FALLBACK_DATE} was used.",
+                }
+                print(f"WARNING: using built-in {label} list dated {NASDAQ100_FALLBACK_DATE}", file=sys.stderr)
 
     if not frames:
         raise RuntimeError("none of the index lists could be loaded")
@@ -230,7 +293,7 @@ TEMPLATE = r"""<!doctype html>
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:1240px; margin:0 auto; padding:28px 16px 48px; }
+  .wrap { max-width:1360px; margin:0 auto; padding:28px 16px 48px; }
   h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
   .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
@@ -251,6 +314,8 @@ TEMPLATE = r"""<!doctype html>
          padding:4px 12px; font-size:13px; color:var(--fg); cursor:pointer; margin:0; }
   .chk input { width:auto; margin:0; }
   .rule { color:var(--muted); font-size:13px; margin:12px 0 0; }
+  .sub2 { color:var(--muted); font-size:12px; margin:16px 0 8px; }
+  .sub2 span { opacity:.8; }
   .reset { float:right; background:none; border:0; color:var(--accent); font:inherit; font-size:13px; cursor:pointer; padding:0; }
   .tw { overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); }
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -261,7 +326,7 @@ TEMPLATE = r"""<!doctype html>
   th:hover { color:var(--fg); }
   tr:last-child td { border-bottom:0; }
   td a { color:var(--accent); text-decoration:none; }
-  .nm { display:block; color:var(--muted); font-size:12px; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+  .nm { display:block; color:var(--muted); font-size:12px; max-width:170px; overflow:hidden; text-overflow:ellipsis; }
   .up { color:var(--up); font-weight:600; }
   .dn { color:var(--down); font-weight:600; }
   svg.spark { display:block; margin-left:auto; overflow:visible; }
@@ -295,6 +360,14 @@ TEMPLATE = r"""<!doctype html>
         <option value="20">Top 20</option><option value="50">Top 50</option>
         <option value="100">Top 100</option><option value="0">All matches</option></select></label>
     </div>
+    <div class="sub2">Entry quality <span>(optional &middot; leave blank for no filter)</span></div>
+    <div class="grid">
+      <label>RSI(14) min<input id="rmin" type="number" inputmode="decimal" min="0" max="100" step="1" placeholder="e.g. 55"></label>
+      <label>RSI(14) max<input id="rmax" type="number" inputmode="decimal" min="0" max="100" step="1" placeholder="e.g. 80"></label>
+      <label>Max % above 20 EMA<input id="ext" type="number" inputmode="decimal" step="0.5" placeholder="e.g. 8"></label>
+      <label>Min relative volume (&times;)<input id="rv" type="number" inputmode="decimal" min="0" step="0.1" placeholder="e.g. 1.5"></label>
+      <label>Min RS rank (0&ndash;99)<input id="rs" type="number" inputmode="numeric" min="0" max="99" step="1" placeholder="e.g. 80"></label>
+    </div>
     <div class="chips"><span class="lbl">Lookback presets</span><span id="presets"></span></div>
     <div class="chips"><span class="lbl">Indices</span><span id="indices"></span></div>
     <p class="rule" id="rule"></p>
@@ -305,6 +378,7 @@ TEMPLATE = r"""<!doctype html>
   <p class="foot" id="foot"></p>
   <p class="foot">End-of-day data from Yahoo Finance via yfinance (unofficial; split-adjusted, not dividend-adjusted).
   Avg daily $ volume = average of close &times; volume over the 20 sessions before the signal day.
+  RSI is Wilder&rsquo;s 14-day RSI. &ldquo;vs 20 EMA&rdquo; is how far the close sits above its 20-day EMA. RS rank is the percentile (0&ndash;99) of the 6-month return among all stocks scanned, 99 being the strongest.
   The 1-month chart has one bar per session (21 sessions): each bar is the return of that day&rsquo;s close vs the close one month before the last bar, green above that level and red below it.
   For information only, not investment advice.</p>
 </div>
@@ -319,11 +393,15 @@ const COLS = [
   {k: "close", t: "Close", num: 1}, {k: "chg", t: "Day %", num: 1},
   {k: "m1", t: "1M %", num: 1, tip: "Return over the last ~21 trading sessions"},
   {k: "spark", t: "1 month", chart: 1, tip: "Bars: return vs the close one month ago, one bar per session. Green = above, red = below."},
+  {k: "rsi", t: "RSI", num: 1, tip: "Wilder RSI(14) on daily closes"},
+  {k: "ext20", t: "vs 20 EMA", num: 1, tip: "How far the close is above its 20-day EMA, in %. A rough guide to stop distance if you trail under the 20 EMA."},
+  {k: "rs", t: "RS rank", num: 1, tip: "Percentile (0-99) of the 6-month return among all stocks scanned. 99 = strongest."},
   {k: "rvol", t: "Rel vol", num: 1, tip: "Today's volume vs the average of the previous 20 sessions"},
   {k: "adv", t: "Avg $ vol", num: 1, tip: "Average daily dollar volume, previous 20 sessions"},
   {k: "n1", t: "Cleared", num: 1, tip: "Number of previous sessions whose highs today's close is above (the longest lookback it would pass)"}
 ];
 const $ = id => document.getElementById(id);
+const num = id => { const s = $(id).value.trim(); if (s === "") return null; const v = parseFloat(s); return isNaN(v) ? null : v; };
 const sort = {k: "chg", asc: false};
 
 for (const r of ROWS) r.idxs = r.idx.join(" ");
@@ -331,6 +409,7 @@ for (const r of ROWS) r.idxs = r.idx.join(" ");
 function setDefaults() {
   $("n").value = DEF.n; $("adv").value = DEF.adv; $("px").value = DEF.px;
   $("cap").value = DEF.cap; $("top").value = DEF.top;
+  for (const id of ["rmin", "rmax", "ext", "rv", "rs"]) $(id).value = "";
   document.querySelectorAll(".idx").forEach(e => e.checked = true);
 }
 
@@ -359,7 +438,11 @@ function buildStatic() {
     w.textContent = " Not loaded on this run: " + META.failed.join(", ") + ".";
     $("foot").appendChild(w);
   }
-  for (const id of ["n", "adv", "px", "cap"]) $(id).addEventListener("input", update);
+  for (const n of META.notes || []) {
+    const w = document.createElement("span"); w.className = "warn"; w.textContent = " " + n;
+    $("foot").appendChild(w);
+  }
+  for (const id of ["n", "adv", "px", "cap", "rmin", "rmax", "ext", "rv", "rs"]) $(id).addEventListener("input", update);
   $("top").addEventListener("change", update);
   $("reset").addEventListener("click", () => { setDefaults(); update(); });
 }
@@ -372,8 +455,14 @@ function matches() {
   const capRaw = $("cap").value.trim();
   const cap = capRaw === "" || isNaN(parseFloat(capRaw)) ? Infinity : parseFloat(capRaw);
   const sel = new Set([...document.querySelectorAll(".idx:checked")].map(e => e.value));
+  const rmin = num("rmin"), rmax = num("rmax"), ext = num("ext"), rv = num("rv"), rs = num("rs");
   return ROWS.filter(r => N > r.n2 + 1 && N <= r.n1 && r.adv >= minAdv && r.close >= minPx
-                          && r.chg <= cap && r.idx.some(i => sel.has(i)));
+                          && r.chg <= cap && r.idx.some(i => sel.has(i))
+                          && (rmin === null || (r.rsi !== null && r.rsi >= rmin))
+                          && (rmax === null || (r.rsi !== null && r.rsi <= rmax))
+                          && (ext === null || r.ext20 <= ext)
+                          && (rv === null || r.rvol >= rv)
+                          && (rs === null || (r.rs !== null && r.rs >= rs)));
 }
 
 function cell(text, cls) {
@@ -419,8 +508,9 @@ function update() {
   list = list ? list.slice() : [];
   const c = COLS.find(x => x.k === sort.k);
   list.sort((a, b) => {
-    const x = a[sort.k], y = b[sort.k];
-    const r = c.num ? x - y : String(x).localeCompare(String(y));
+    let x = a[sort.k], y = b[sort.k], r;
+    if (c.num) { x = x ?? -Infinity; y = y ?? -Infinity; r = x === y ? 0 : (x < y ? -1 : 1); }
+    else r = String(x).localeCompare(String(y));
     return sort.asc ? r : -r;
   });
   const top = parseInt($("top").value, 10);
@@ -464,6 +554,9 @@ function update() {
     tr.appendChild(cell("+" + r.chg.toFixed(2) + "%", "up"));
     tr.appendChild(cell((r.m1 >= 0 ? "+" : "") + r.m1.toFixed(1) + "%", r.m1 >= 0 ? "up" : "dn"));
     tr.appendChild(sparkCell(r.spark, r.m1));
+    tr.appendChild(cell(r.rsi === null ? "—" : r.rsi.toFixed(1)));
+    tr.appendChild(cell((r.ext20 >= 0 ? "+" : "") + r.ext20.toFixed(1) + "%"));
+    tr.appendChild(cell(r.rs === null ? "—" : String(r.rs)));
     tr.appendChild(cell(r.rvol.toFixed(1) + "×"));
     tr.appendChild(cell("$" + (r.adv / 1e6).toFixed(1) + "M"));
     tr.appendChild(cell((r.n1 >= r.bars ? "≥ " : "") + r.n1));
@@ -491,17 +584,22 @@ def main() -> int:
 
     rows: list[dict] = []
     dates: list[str] = []
+    ret6: dict[str, tuple[str, float]] = {}
     scanned = 0
     for yf_sym, df in prices.items():
         df = drop_incomplete_today(df)
         if len(df) < MIN_BARS:
             continue
         scanned += 1
-        dates.append(df.index[-1].strftime("%Y-%m-%d"))
+        last = df.index[-1].strftime("%Y-%m-%d")
+        dates.append(last)
+        r6 = six_month_return(df)
+        if r6 is not None:
+            ret6[yf_sym] = (last, r6)
         st = breakout_stats(df)
         if st:
             m = meta_by_yf.loc[yf_sym]
-            st.update(sym=m["symbol"], name=m["name"], sector=m["sector"], idx=list(m["idx"]))
+            st.update(yf=yf_sym, sym=m["symbol"], name=m["name"], sector=m["sector"], idx=list(m["idx"]))
             rows.append(st)
 
     if scanned < MIN_TICKERS:
@@ -510,6 +608,9 @@ def main() -> int:
 
     data_date = pd.Series(dates).mode().iloc[0]        # ignore stragglers with stale last bars
     rows = [r for r in rows if r.pop("date") == data_date]
+    ranks = rs_ranks({k: v for k, (d, v) in ret6.items() if d == data_date})
+    for r in rows:
+        r["rs"] = ranks.get(r.pop("yf"))
 
     meta = {
         "date": data_date,
@@ -518,6 +619,7 @@ def main() -> int:
         "minLookback": MIN_LOOKBACK,
         "indices": [{"code": c, "label": v["label"], "count": v["count"]} for c, v in loaded.items()],
         "failed": [label for code, label, _, _ in SOURCES if code not in loaded],
+        "notes": [v["note"] for v in loaded.values() if v.get("note")],
     }
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(render(rows, meta), encoding="utf-8")
