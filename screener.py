@@ -41,6 +41,8 @@ SPARK_DAYS = 21             # sessions in the 1-month bar chart (about one tradi
 RSI_PERIOD = 14             # Wilder RSI length
 EMA_FAST = 20               # EMA used for the "extension" measure
 RS_LOOKBACK = 126          # sessions (about 6 months) for the relative-strength rank
+EMA_SLOW = 50               # second EMA drawn on the hover chart
+PREVIEW_DAYS = 126          # sessions of candles shown in the hover chart
 MIN_TICKERS = 400           # refuse to publish if fewer tickers returned data
 
 OUT_PATH = Path(__file__).parent / "docs" / "index.html"
@@ -131,7 +133,22 @@ def breakout_stats(df: pd.DataFrame) -> dict | None:
     # 1-month chart: return of each of the last SPARK_DAYS closes vs the close just before them
     base = float(c[-1 - SPARK_DAYS])
     spark = [round((float(x) / base - 1.0) * 100.0, 1) for x in c[-SPARK_DAYS:]]
-    ema_fast = float(pd.Series(c).ewm(span=EMA_FAST, adjust=False).mean().iloc[-1])
+    cs = pd.Series(c)
+    e_fast = cs.ewm(span=EMA_FAST, adjust=False).mean().to_numpy()
+    e_slow = cs.ewm(span=EMA_SLOW, adjust=False).mean().to_numpy()
+    ema_fast = float(e_fast[-1])
+    # Breakout level for ANY lookback N = highest high of the previous N sessions. As N grows this is a
+    # staircase, so keep only the steps: [[k, level], ...] means "from N = k sessions on, the level is `level`".
+    prev_hi = np.maximum.accumulate(h[:-1][::-1])
+    steps = [[int(i + 1), round(float(prev_hi[i]), 2)] for i in range(len(prev_hi))
+             if i == 0 or prev_hi[i] > prev_hi[i - 1]]
+    pv = min(PREVIEW_DAYS, n)
+    r2 = lambda a: np.round(np.asarray(a, dtype=float)[-pv:], 2).tolist()
+    cx = {
+        "o": r2(df["Open"].to_numpy(dtype=float)), "h": r2(h), "l": r2(df["Low"].to_numpy(dtype=float)), "c": r2(c),
+        "v": [int(x / 1000) for x in v[-pv:]], "e1": r2(e_fast), "e2": r2(e_slow),
+        "d0": df.index[-pv].strftime("%Y-%m-%d"), "d1": df.index[-1].strftime("%Y-%m-%d"),
+    }
     rsi = rsi_wilder(c)
     return {
         "date": df.index[-1].strftime("%Y-%m-%d"),
@@ -141,6 +158,8 @@ def breakout_stats(df: pd.DataFrame) -> dict | None:
         "spark": spark,
         "rsi": round(rsi, 1) if rsi is not None else None,
         "ext20": round((float(c[-1]) / ema_fast - 1.0) * 100.0, 1),
+        "cx": cx,
+        "lv": steps,
         "rvol": round(float(v[-1]) / mean_vol, 2) if mean_vol > 0 else 0.0,
         "adv": int(prior_dollar.mean()),
         "n1": int(n1),
@@ -284,11 +303,11 @@ TEMPLATE = r"""<!doctype html>
 <style>
   :root {
     --bg:#fbfbf9; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e2dc; --card:#ffffff;
-    --up:#0f7b4d; --down:#c23a2b; --accent:#2b5fd9; --chip:#eeede7; --chipon:#2b5fd9; --chipfg:#ffffff;
+    --up:#0f7b4d; --down:#c23a2b; --e20:#e5484d; --e50:#3b6fd8; --accent:#2b5fd9; --chip:#eeede7; --chipon:#2b5fd9; --chipfg:#ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#141413; --fg:#ecebe6; --muted:#9a9990; --line:#2c2c29; --card:#1b1b19;
-            --up:#4cc38a; --down:#ff7566; --accent:#7ba0ff; --chip:#262624; --chipon:#7ba0ff; --chipfg:#101010; }
+            --up:#4cc38a; --down:#ff7566; --e20:#ff6b6b; --e50:#6c9bff; --accent:#7ba0ff; --chip:#262624; --chipon:#7ba0ff; --chipfg:#101010; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
@@ -336,6 +355,30 @@ TEMPLATE = r"""<!doctype html>
   .empty { text-align:center !important; color:var(--muted); padding:28px; }
   .foot { color:var(--muted); font-size:12px; margin-top:16px; }
   .warn { color:#b3541e; }
+  .hint { color:var(--muted); font-size:12px; margin:0 0 8px; }
+  tbody tr:hover td { background:var(--chip); }
+  tbody tr:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+  .pv { position:fixed; z-index:50; width:424px; max-width:calc(100vw - 16px); background:var(--card);
+        border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+        padding:10px 12px 8px; pointer-events:none; }
+  .pv[hidden] { display:none; }
+  .pv .hd { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pv .lg { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:11px; color:var(--muted); margin:3px 0 6px; }
+  .pv .sw { display:inline-block; width:14px; border-top:2px solid; vertical-align:middle; margin-right:5px; }
+  svg.pvs { display:block; width:100%; height:auto; }
+  .pvs .up { fill:var(--up); stroke:var(--up); }
+  .pvs .dn { fill:var(--down); stroke:var(--down); }
+  .pvs .vol { opacity:.45; stroke:none; }
+  .pvs .wick { stroke-width:1; }
+  .pvs .body { stroke:none; }
+  .pvs .band { fill:var(--chip); }
+  .pvs .grid { stroke:var(--line); stroke-width:1; }
+  .pvs .ema { fill:none; stroke-width:1.4; stroke-linejoin:round; }
+  .pvs .e1 { stroke:var(--e20); }
+  .pvs .e2 { stroke:var(--e50); }
+  .pvs .lvl { stroke:var(--fg); stroke-width:1; stroke-dasharray:4 3; }
+  .pvs text { font:10px system-ui,sans-serif; fill:var(--muted); }
+  .pvs .lvt { fill:var(--fg); }
 </style>
 </head>
 <body>
@@ -373,6 +416,7 @@ TEMPLATE = r"""<!doctype html>
     <p class="rule" id="rule"></p>
   </section>
 
+  <p class="hint">Hover a row (or tab to it) for a 6-month chart: candles, 20 EMA (red), 50 EMA (blue), volume and the breakout level for your lookback.</p>
   <div class="tw"><table id="t"><thead><tr id="hr"></tr></thead><tbody id="tb"></tbody></table></div>
 
   <p class="foot" id="foot"></p>
@@ -383,6 +427,7 @@ TEMPLATE = r"""<!doctype html>
   For information only, not investment advice.</p>
 </div>
 
+<div id="pv" class="pv" hidden></div>
 <script>
 const DATA = __DATA__;
 const ROWS = DATA.rows, META = DATA.meta;
@@ -496,7 +541,97 @@ function sparkCell(vals, m1) {
 }
 const fmt2 = x => x.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
+function levelFor(steps, N) {
+  let v = null;
+  for (const st of steps) { if (st[0] <= N) v = st[1]; else break; }
+  return v;
+}
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const fmtPx = v => v.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+function drawPreview(r, N) {
+  const cx = r.cx, n = cx.c.length;
+  const W = 400, H = 224, L = 6, R = 50, PT = 6, PH = 154, VT = 168, VH = 38;
+  const pw = W - L - R, step = pw / n, bw = Math.max(1, step * 0.66);
+  const lvl = levelFor(r.lv, N);
+  let hi = Math.max(...cx.h), lo = Math.min(...cx.l);
+  if (lvl !== null) { hi = Math.max(hi, lvl); lo = Math.min(lo, lvl); }
+  const pad = (hi - lo) * 0.04 || hi * 0.02; hi += pad; lo -= pad;
+  const Y = v => PT + (hi - v) / (hi - lo) * PH;
+  const X = i => L + (i + 0.5) * step;
+  const svg = svgEl("svg", {viewBox: "0 0 " + W + " " + H, "class": "pvs", role: "img",
+    "aria-label": r.sym + " daily chart, last " + n + " sessions"});
+  svgEl("rect", {"class": "band", x: L + (n - 1) * step, y: PT, width: step, height: VT + VH - PT}, svg);
+  for (let g = 0; g <= 3; g++) {
+    const v = lo + (hi - lo) * g / 3, y = Y(v);
+    svgEl("line", {"class": "grid", x1: L, x2: L + pw, y1: y, y2: y}, svg);
+    svgEl("text", {x: L + pw + 4, y: y + 3}, svg).textContent = fmtPx(v);
+  }
+  const mv = Math.max(...cx.v) || 1;
+  for (let i = 0; i < n; i++) {
+    const h = Math.max(cx.v[i] / mv * VH, 0.5);
+    svgEl("rect", {"class": "vol " + (cx.c[i] >= cx.o[i] ? "up" : "dn"), x: X(i) - bw / 2, y: VT + VH - h, width: bw, height: h}, svg);
+  }
+  for (let i = 0; i < n; i++) {
+    const cls = cx.c[i] >= cx.o[i] ? "up" : "dn", yo = Y(cx.o[i]), yc = Y(cx.c[i]);
+    svgEl("line", {"class": "wick " + cls, x1: X(i), x2: X(i), y1: Y(cx.h[i]), y2: Y(cx.l[i])}, svg);
+    svgEl("rect", {"class": "body " + cls, x: X(i) - bw / 2, y: Math.min(yo, yc), width: bw, height: Math.max(Math.abs(yo - yc), 1)}, svg);
+  }
+  const line = (arr, cls) => svgEl("polyline", {"class": "ema " + cls,
+    points: arr.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1)).join(" ")}, svg);
+  line(cx.e2, "e2"); line(cx.e1, "e1");
+  if (lvl !== null) {
+    svgEl("line", {"class": "lvl", x1: L, x2: L + pw, y1: Y(lvl), y2: Y(lvl)}, svg);
+    svgEl("text", {"class": "lvt", x: L + 4, y: Y(lvl) - 4}, svg).textContent = N + "-session high " + fmtPx(lvl);
+  }
+  svgEl("text", {x: L, y: H - 3}, svg).textContent = cx.d0;
+  svgEl("text", {x: L + pw, y: H - 3, "text-anchor": "end"}, svg).textContent = cx.d1;
+  return svg;
+}
+
+const pvBox = $("pv");
+function placePv(x, y) {
+  const pad = 16, w = pvBox.offsetWidth, h = pvBox.offsetHeight;
+  let left = x + pad;
+  if (left + w > window.innerWidth - 8) left = x - pad - w;
+  left = Math.max(8, left);
+  const top = Math.max(8, Math.min(window.innerHeight - h - 8, y - h / 2));
+  pvBox.style.left = left + "px"; pvBox.style.top = top + "px";
+}
+function showPv(r, x, y) {
+  const N = parseInt($("n").value, 10);
+  pvBox.replaceChildren();
+  const hd = document.createElement("div"); hd.className = "hd";
+  const b = document.createElement("b"); b.textContent = r.sym; hd.appendChild(b);
+  hd.appendChild(document.createTextNode("  " + r.name + "  ·  " + fmtPx(r.close) + "  (+" + r.chg.toFixed(2) + "%)"));
+  const lg = document.createElement("div"); lg.className = "lg";
+  for (const [txt, css] of [["20 EMA", "border-color:var(--e20)"], ["50 EMA", "border-color:var(--e50)"],
+                            ["breakout level", "border-top-style:dashed;border-color:var(--fg)"]]) {
+    const s = document.createElement("span"), sw = document.createElement("i");
+    sw.className = "sw"; sw.style.cssText = css; s.appendChild(sw); s.appendChild(document.createTextNode(txt)); lg.appendChild(s);
+  }
+  pvBox.appendChild(hd); pvBox.appendChild(lg); pvBox.appendChild(drawPreview(r, N));
+  pvBox.hidden = false;
+  placePv(x, y);
+}
+function hidePv() { pvBox.hidden = true; }
+function attachPv(tr, r) {
+  tr.tabIndex = 0;
+  tr.addEventListener("mouseenter", e => showPv(r, e.clientX, e.clientY));
+  tr.addEventListener("mousemove", e => placePv(e.clientX, e.clientY));
+  tr.addEventListener("mouseleave", hidePv);
+  tr.addEventListener("focus", () => { const b = tr.getBoundingClientRect(); showPv(r, b.left + b.width / 2, b.top + b.height / 2); });
+  tr.addEventListener("blur", hidePv);
+}
+window.addEventListener("scroll", hidePv, true);
+
 function update() {
+  hidePv();
   const N = parseInt($("n").value, 10);
   document.querySelectorAll("#presets .chip").forEach(b => b.classList.toggle("on", +b.dataset.n === N));
   $("rule").textContent = N >= META.minLookback
@@ -540,6 +675,7 @@ function update() {
   }
   list.forEach((r, i) => {
     const tr = document.createElement("tr");
+    attachPv(tr, r);
     tr.appendChild(cell(i + 1));
     const s = document.createElement("td");
     const a = document.createElement("a");
