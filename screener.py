@@ -45,11 +45,13 @@ RSI_PERIOD = 14             # Wilder RSI length
 EMA_FAST = 20               # EMA used for the "extension" measure
 RS_LOOKBACK = 126          # sessions (about 6 months) for the relative-strength rank
 EMA_SLOW = 50               # second EMA drawn on the hover chart
+SETTLE_MINUTES = 15       # wait this long after the close before trusting the day's final candle
 PREVIEW_DAYS = 126          # sessions of candles shown in the hover chart
 
 # Per-market settings. "defaults" are the starting values of the liquidity / price / day-change filters;
-# adv is in advUnit (US: $ million, India: Rs crore, 1 crore = 10 million). close_utc_hour is a safe time after
-# the cash-market close, used to avoid screening a candle that is still forming.
+# adv is in advUnit (US: $ million, India: Rs crore, 1 crore = 10 million). tz/close is the cash-market
+# closing time (daylight saving is handled automatically); a candle is only screened once SETTLE_MINUTES have passed
+# since the close, so a candle that is still forming (or that Yahoo is still revising) is never used.
 MARKETS = {
     "US": {
         "name": "US", "currency": "$", "advUnit": "M", "advFactor": 1e6, "locale": "en-US", "tvPrefix": "",
@@ -57,7 +59,7 @@ MARKETS = {
         "advHeader": "Avg $ vol (M)", "advTip": "Average daily dollar volume (close x volume), previous 20 sessions",
         "footNote": "Avg daily $ volume = average of close \u00d7 volume over the 20 sessions before the signal day.",
         "defaults": {"adv": 10, "px": 5, "cap": 15},
-        "close_utc_hour": 21, "min_tickers": 400,
+        "tz": "America/New_York", "close": (16, 0), "min_tickers": 400,
     },
     "IN": {
         "name": "India (NSE)", "currency": "\u20b9", "advUnit": "Cr", "advFactor": 1e7, "locale": "en-IN", "tvPrefix": "NSE:",
@@ -66,7 +68,7 @@ MARKETS = {
         "footNote": "Avg daily turnover = average of close \u00d7 volume over the 20 sessions before the signal day, in \u20b9 crore "
                     "(1 crore = 10 million rupees). NSE price bands of 5%, 10% or 20% limit how far a stock can move in one day.",
         "defaults": {"adv": 10, "px": 50, "cap": 15},
-        "close_utc_hour": 11, "min_tickers": 300,
+        "tz": "Asia/Kolkata", "close": (15, 30), "min_tickers": 300,
     },
 }
 
@@ -411,10 +413,14 @@ def download_prices(tickers: list[str], batch: int = 100) -> dict[str, pd.DataFr
     return frames
 
 
-def drop_incomplete_today(df: pd.DataFrame, close_utc_hour: int = 21) -> pd.DataFrame:
-    """Never screen a candle that may still be forming (close_utc_hour: a safe time after the market close)."""
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    if df.index[-1].date() == now_utc.date() and now_utc.hour < close_utc_hour:
+def drop_incomplete_today(df: pd.DataFrame, tz: str = "America/New_York", close: tuple = (16, 0),
+                          settle: int = SETTLE_MINUTES) -> pd.DataFrame:
+    """Never screen a candle that may still be forming: drop today's bar until `settle` minutes after the close."""
+    from zoneinfo import ZoneInfo
+
+    now = dt.datetime.now(dt.timezone.utc).astimezone(ZoneInfo(tz))
+    ready = now.replace(hour=close[0], minute=close[1], second=0, microsecond=0) + dt.timedelta(minutes=settle)
+    if df.index[-1].date() == now.date() and now < ready:
         return df.iloc[:-1]
     return df
 
@@ -441,6 +447,10 @@ TEMPLATE = r"""<!doctype html>
   .wrap { max-width:1360px; margin:0 auto; padding:28px 16px 48px; }
   h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .upd, .newdata button { font:inherit; font-size:12px; margin-left:8px; padding:3px 10px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); cursor:pointer; }
+  .upd:hover, .newdata button:hover { border-color:var(--accent); }
+  .newdata { background:#e8f0fe; color:#1a3d8f; border:1px solid #b6cbf5; border-radius:10px; padding:9px 14px; font-size:13.5px; margin:-6px 0 16px; }
+  @media (prefers-color-scheme: dark) { .newdata { background:#1b2a4a; color:#cfdcff; border-color:#2f4a85; } }
   .tabs { display:inline-flex; gap:4px; background:var(--chip); padding:3px; border-radius:999px; margin:6px 0 12px; }
   .tabs[hidden] { display:none; }
   .tab { border:0; background:none; color:var(--fg); font:inherit; font-size:14px; padding:5px 16px; border-radius:999px; cursor:pointer; }
@@ -515,7 +525,8 @@ TEMPLATE = r"""<!doctype html>
 <div class="wrap">
   <h1>Breakout Screener</h1>
   <div class="tabs" id="tabs" role="tablist"></div>
-  <div class="sub" id="sub"></div>
+  <div class="sub"><span id="sub"></span> <button type="button" class="upd" id="chk">Check for new data</button> <span id="chk-msg" aria-live="polite"></span></div>
+  <div class="newdata" id="newdata" hidden>New data is available. <button type="button" id="loadnew">Load it</button></div>
 
   <div class="stats">
     <div class="stat"><b id="s-scanned">0</b><span>stocks scanned</span></div>
@@ -581,7 +592,8 @@ const $ = id => document.getElementById(id);
 const num = id => { const s = $(id).value.trim(); if (s === "") return null; const v = parseFloat(s); return isNaN(v) ? null : v; };
 const sort = {k: "chg", asc: false};
 
-for (const code in MK) for (const r of MK[code].rows) r.idxs = r.idx.join(" ");
+const prep = mk => { for (const code in mk) for (const r of mk[code].rows) r.idxs = r.idx.join(" "); };
+prep(MK);
 
 function setMarketDefaults() {
   $("adv").value = DEF.adv; $("px").value = DEF.px; $("cap").value = DEF.cap;
@@ -864,21 +876,72 @@ buildStatic(); setDefaults();
   }
   setMarket(start || DATA.order[0]);
 })();
+
+// ---- new-data check: compares this page's build time with version.json on the server ----
+let NEWER = null;
+function showNew(on) { $("newdata").hidden = !on; }
+async function checkNew(manual) {
+  const msg = $("chk-msg");
+  if (location.protocol === "file:") { if (manual) msg.textContent = "Only works on the published page."; return; }
+  if (manual) msg.textContent = "Checking…";
+  try {
+    const r = await fetch("version.json?t=" + Date.now(), {cache: "no-store"});
+    if (!r.ok) throw new Error(r.status);
+    const v = await r.json();
+    if (v.built && v.built > DATA.built) {
+      NEWER = v.built; showNew(true); msg.textContent = manual ? "New data is available." : "";
+    } else if (manual) {
+      msg.textContent = "You have the latest data (checked " + new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + ").";
+    }
+  } catch (e) {
+    if (manual) msg.textContent = "Couldn’t check right now.";
+  }
+}
+async function loadNew() {
+  const msg = $("chk-msg");
+  try {
+    const r = await fetch("index.html?t=" + Date.now(), {cache: "no-store"});
+    if (!r.ok) throw new Error(r.status);
+    const html = await r.text();
+    const nd = JSON.parse(html.split("const DATA = ", 2)[1].split(";\nconst MK", 1)[0]);
+    if (nd.order.join() !== DATA.order.join()) { location.reload(); return; }
+    const keep = {};
+    for (const id of ["n", "adv", "px", "cap", "top", "rmin", "rmax", "ext", "rv", "rs"]) keep[id] = $(id).value;
+    const off = [...document.querySelectorAll(".idx:not(:checked)")].map(e => e.value);
+    prep(nd.markets);
+    for (const code of nd.order) MK[code] = nd.markets[code];
+    DATA.built = nd.built; NEWER = null;
+    setMarket(CUR);                                        // rebinds rows/meta; then put the user's settings back
+    for (const id in keep) $(id).value = keep[id];
+    document.querySelectorAll(".idx").forEach(e => { e.checked = !off.includes(e.value); });
+    update(); showNew(false); msg.textContent = "Updated.";
+  } catch (e) {
+    msg.textContent = "Couldn’t load the new data; try reloading the page.";
+  }
+}
+$("chk").addEventListener("click", () => checkNew(true));
+$("loadnew").addEventListener("click", loadNew);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkNew(false); });
+setInterval(() => { if (!document.hidden) checkNew(false); }, 15 * 60 * 1000);
+checkNew(false);
 </script>
 </body>
 </html>
 """
 
 
+BUILT = ""   # set by main(): UTC timestamp identifying this build
+
+
 def render(markets: dict[str, dict]) -> str:
     order = [c for c in MARKETS if c in markets]
-    payload = json.dumps({"markets": markets, "order": order}, separators=(",", ":")).replace("<", "\\u003c")
+    payload = json.dumps({"markets": markets, "order": order, "built": BUILT}, separators=(",", ":")).replace("<", "\\u003c")
     return TEMPLATE.replace("__DATA__", payload)
 
 
 # ---------------------------------------------------------------- markets ---
 def page_cfg(code: str) -> dict:
-    return {k: v for k, v in MARKETS[code].items() if k not in ("close_utc_hour", "min_tickers")}
+    return {k: v for k, v in MARKETS[code].items() if k not in ("tz", "close", "min_tickers")}
 
 
 def load_universe(code: str):
@@ -904,7 +967,7 @@ def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) ->
     for yf_sym, df in prices.items():
         if yf_sym not in meta_by_yf.index:
             continue
-        df = drop_incomplete_today(df, cfg["close_utc_hour"])
+        df = drop_incomplete_today(df, cfg["tz"], cfg["close"])
         if len(df) < MIN_BARS:
             continue
         scanned += 1
@@ -985,8 +1048,12 @@ def main() -> int:
     if not refreshed:
         print("No market could be refreshed; leaving the page unchanged.", file=sys.stderr)
         return 1
+    global BUILT
+    BUILT = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(render(payloads), encoding="utf-8")
+    (OUT_PATH.parent / "version.json").write_text(            # tiny file the page polls to learn about new data
+        json.dumps({"built": BUILT, "sessions": {c: p["meta"]["date"] for c, p in payloads.items()}}), encoding="utf-8")
     return 0
 
 
