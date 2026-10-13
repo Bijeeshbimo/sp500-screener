@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-US breakout screener -> one static HTML page whose filters you can change in the browser.
+Breakout screener (US + India) -> one static HTML page whose filters you can change in the browser.
 
 Mirrors this Chartink scan (N = 200 by default, adjustable on the page):
   1. Daily Close > 1-day-ago Max(N, Daily High)
@@ -17,7 +17,9 @@ two integers:
                                     -> condition 2 holds exactly when N > n2 + 1
 So a stock matches lookback N when  n2 + 1 < N <= n1.
 
-Universe: S&P 500 + S&P 400 + S&P 600 + Nasdaq-100 (de-duplicated).
+Markets (each with its own currency, units, defaults, session date and RS ranking):
+  US     S&P 500 + S&P 400 + S&P 600 + Nasdaq-100 (de-duplicated)
+  India  NSE: Nifty 50 + Nifty Next 50 + Midcap 150 + Smallcap 250 (= Nifty 500), Yahoo ".NS" tickers
 Liquidity, minimum price and a max-daily-change cap are applied on the page.
 """
 from __future__ import annotations
@@ -27,6 +29,7 @@ import io
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -43,7 +46,29 @@ EMA_FAST = 20               # EMA used for the "extension" measure
 RS_LOOKBACK = 126          # sessions (about 6 months) for the relative-strength rank
 EMA_SLOW = 50               # second EMA drawn on the hover chart
 PREVIEW_DAYS = 126          # sessions of candles shown in the hover chart
-MIN_TICKERS = 400           # refuse to publish if fewer tickers returned data
+
+# Per-market settings. "defaults" are the starting values of the liquidity / price / day-change filters;
+# adv is in advUnit (US: $ million, India: Rs crore, 1 crore = 10 million). close_utc_hour is a safe time after
+# the cash-market close, used to avoid screening a candle that is still forming.
+MARKETS = {
+    "US": {
+        "name": "US", "currency": "$", "advUnit": "M", "advFactor": 1e6, "locale": "en-US", "tvPrefix": "",
+        "advLabel": "Min avg daily $ volume ($M)", "pxLabel": "Min price ($)",
+        "advHeader": "Avg $ vol (M)", "advTip": "Average daily dollar volume (close x volume), previous 20 sessions",
+        "footNote": "Avg daily $ volume = average of close \u00d7 volume over the 20 sessions before the signal day.",
+        "defaults": {"adv": 10, "px": 5, "cap": 15},
+        "close_utc_hour": 21, "min_tickers": 400,
+    },
+    "IN": {
+        "name": "India (NSE)", "currency": "\u20b9", "advUnit": "Cr", "advFactor": 1e7, "locale": "en-IN", "tvPrefix": "NSE:",
+        "advLabel": "Min avg daily turnover (\u20b9 crore)", "pxLabel": "Min price (\u20b9)",
+        "advHeader": "Avg turnover (Cr)", "advTip": "Average daily turnover in \u20b9 crore (close x volume), previous 20 sessions",
+        "footNote": "Avg daily turnover = average of close \u00d7 volume over the 20 sessions before the signal day, in \u20b9 crore "
+                    "(1 crore = 10 million rupees). NSE price bands of 5%, 10% or 20% limit how far a stock can move in one day.",
+        "defaults": {"adv": 10, "px": 50, "cap": 15},
+        "close_utc_hour": 11, "min_tickers": 300,
+    },
+}
 
 OUT_PATH = Path(__file__).parent / "docs" / "index.html"
 
@@ -55,6 +80,22 @@ SOURCES = [
     # Wikipedia's Nasdaq-100 article no longer carries a constituents table, so use stockanalysis.com
     ("NDX", "Nasdaq-100", "https://stockanalysis.com/list/nasdaq-100-stocks/", 80),
 ]
+
+# India: NSE publishes each index's constituents as a CSV (Company Name, Industry, Symbol, Series, ISIN Code).
+# Nifty 500 = Nifty 50 + Nifty Next 50 + Midcap 150 + Smallcap 250, so loading the four pieces gives the sub-index chips.
+NSE_BASES = ("https://nsearchives.nseindia.com/content/indices/", "https://www.niftyindices.com/IndexConstituent/")
+NSE_LISTS = [  # code, label, file, minimum rows
+    ("N50", "Nifty 50", "ind_nifty50list.csv", 45),
+    ("NN50", "Nifty Next 50", "ind_niftynext50list.csv", 45),
+    ("MID150", "Midcap 150", "ind_niftymidcap150list.csv", 130),
+    ("SML250", "Smallcap 250", "ind_niftysmallcap250list.csv", 220),
+]
+NSE_ALL = ("N500", "Nifty 500", "ind_nifty500list.csv", 450)     # used only to fill gaps
+NSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "text/csv,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9",
+}
+NSE_RETRY_DELAY = 2   # seconds between attempts
 
 # Used only if the live Nasdaq-100 source cannot be loaded, so the index never silently disappears.
 # Snapshot of 2026-10-12; membership changes a few times a year, so treat it as approximate.
@@ -247,6 +288,91 @@ def load_constituents() -> tuple[pd.DataFrame, dict]:
     return merged, loaded
 
 
+def parse_nse_csv(text: str, min_rows: int) -> pd.DataFrame:
+    """Parse one NSE index-constituents CSV into symbol / name / sector / yf (Yahoo '.NS' ticker).
+    NSE pads some lists with placeholder rows such as 'DUMMYHEG'; those are dropped."""
+    raw = pd.read_csv(io.StringIO(text), dtype=str).fillna("")
+    raw.columns = [str(c).strip() for c in raw.columns]
+    low = {c.lower(): c for c in raw.columns}
+    if "symbol" not in low:
+        raise ValueError("no Symbol column (not a constituents CSV)")
+    sym = raw[low["symbol"]].str.strip()
+    out = pd.DataFrame({
+        "symbol": sym,
+        "name": raw[low["company name"]].str.strip() if "company name" in low else sym,
+        "sector": raw[low["industry"]].str.strip() if "industry" in low else "",
+    })
+    out = out[out["symbol"].str.fullmatch(r"[A-Za-z0-9][A-Za-z0-9&\-_.]{0,19}")]
+    out = out[~out["symbol"].str.upper().str.startswith("DUMMY")].drop_duplicates("symbol").copy()
+    if len(out) < min_rows:
+        raise ValueError(f"only {len(out)} usable rows (expected at least {min_rows})")
+    out["name"] = out["name"].where(out["name"] != "", out["symbol"])
+    out["yf"] = out["symbol"] + ".NS"
+    return out.reset_index(drop=True)
+
+
+def _fetch_nse_csv(filename: str, min_rows: int, attempts: int = 2) -> pd.DataFrame:
+    import requests
+
+    last: Exception | None = None
+    for base in NSE_BASES:
+        for _ in range(attempts):
+            try:
+                resp = requests.get(base + filename, headers=NSE_HEADERS, timeout=30)
+                resp.raise_for_status()
+                return parse_nse_csv(resp.text, min_rows)
+            except Exception as e:
+                last = e
+                time.sleep(NSE_RETRY_DELAY)
+    raise RuntimeError(f"{filename}: {last}")
+
+
+def _merge_frames(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    return (
+        pd.concat(frames, ignore_index=True)
+        .groupby("yf", sort=False)
+        .agg(symbol=("symbol", "first"), name=("name", "first"),
+             sector=("sector", lambda s: next((x for x in s if x), "")),
+             idx=("idx", lambda s: list(dict.fromkeys(s))))
+        .reset_index()
+    )
+
+
+def load_india_constituents() -> tuple[pd.DataFrame, dict]:
+    frames, loaded = [], {}
+    for code, label, filename, min_rows in NSE_LISTS:
+        try:
+            df = _fetch_nse_csv(filename, min_rows)
+            df["idx"] = code
+            frames.append(df)
+            loaded[code] = {"label": label, "count": int(len(df))}
+        except Exception as e:
+            print(f"WARNING: could not load {label}: {e}", file=sys.stderr)
+
+    have = set().union(*[set(f["yf"]) for f in frames]) if frames else set()
+    code, label, filename, min_rows = NSE_ALL
+    if len(have) < min_rows:                       # something is missing: fill the gap from the combined list
+        try:
+            df = _fetch_nse_csv(filename, min_rows)
+            extra = df[~df["yf"].isin(have)].copy()
+            if len(extra):
+                had_parts = bool(frames)
+                extra["idx"] = code
+                frames.append(extra)
+                loaded[code] = {
+                    "label": "Other Nifty 500" if had_parts else label, "count": int(len(extra)),
+                    "note": ("Some Nifty index lists could not be loaded, so the missing stocks were added from the "
+                             "combined Nifty 500 list (shown as \u201cOther Nifty 500\u201d).") if had_parts else
+                            "The individual Nifty index lists could not be loaded, so the combined Nifty 500 list was used.",
+                }
+        except Exception as e:
+            print(f"WARNING: could not load {label}: {e}", file=sys.stderr)
+
+    if not frames:
+        raise RuntimeError("none of the NSE index lists could be loaded")
+    return _merge_frames(frames), loaded
+
+
 # ------------------------------------------------------------------ prices --
 PRICE_COLS = ["Open", "High", "Low", "Close", "Volume"]
 
@@ -285,10 +411,10 @@ def download_prices(tickers: list[str], batch: int = 100) -> dict[str, pd.DataFr
     return frames
 
 
-def drop_incomplete_today(df: pd.DataFrame) -> pd.DataFrame:
-    """Never screen a candle that may still be forming."""
+def drop_incomplete_today(df: pd.DataFrame, close_utc_hour: int = 21) -> pd.DataFrame:
+    """Never screen a candle that may still be forming (close_utc_hour: a safe time after the market close)."""
     now_utc = dt.datetime.now(dt.timezone.utc)
-    if df.index[-1].date() == now_utc.date() and now_utc.hour < 21:
+    if df.index[-1].date() == now_utc.date() and now_utc.hour < close_utc_hour:
         return df.iloc[:-1]
     return df
 
@@ -299,7 +425,7 @@ TEMPLATE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>US Breakout Screener</title>
+<title>Breakout Screener</title>
 <style>
   :root {
     --bg:#fbfbf9; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e2dc; --card:#ffffff;
@@ -315,6 +441,10 @@ TEMPLATE = r"""<!doctype html>
   .wrap { max-width:1360px; margin:0 auto; padding:28px 16px 48px; }
   h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .tabs { display:inline-flex; gap:4px; background:var(--chip); padding:3px; border-radius:999px; margin:6px 0 12px; }
+  .tabs[hidden] { display:none; }
+  .tab { border:0; background:none; color:var(--fg); font:inherit; font-size:14px; padding:5px 16px; border-radius:999px; cursor:pointer; }
+  .tab[aria-selected="true"] { background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.18); font-weight:600; }
   .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
   .stat b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
@@ -383,7 +513,8 @@ TEMPLATE = r"""<!doctype html>
 </head>
 <body>
 <div class="wrap">
-  <h1>US Breakout Screener</h1>
+  <h1>Breakout Screener</h1>
+  <div class="tabs" id="tabs" role="tablist"></div>
   <div class="sub" id="sub"></div>
 
   <div class="stats">
@@ -396,8 +527,8 @@ TEMPLATE = r"""<!doctype html>
     <button class="reset" id="reset" type="button">Reset</button>
     <div class="grid">
       <label>Lookback (sessions)<input id="n" type="number" inputmode="numeric" min="5" step="1"></label>
-      <label>Min avg daily $ volume (M)<input id="adv" type="number" inputmode="decimal" min="0" step="1"></label>
-      <label>Min price ($)<input id="px" type="number" inputmode="decimal" min="0" step="0.5"></label>
+      <label><span id="l-adv">Min avg daily $ volume ($M)</span><input id="adv" type="number" inputmode="decimal" min="0" step="1"></label>
+      <label><span id="l-px">Min price ($)</span><input id="px" type="number" inputmode="decimal" min="0" step="0.5"></label>
       <label>Max day change (%)<input id="cap" type="number" inputmode="decimal" min="0" step="1" placeholder="no cap"></label>
       <label>Show<select id="top">
         <option value="20">Top 20</option><option value="50">Top 50</option>
@@ -421,7 +552,7 @@ TEMPLATE = r"""<!doctype html>
 
   <p class="foot" id="foot"></p>
   <p class="foot">End-of-day data from Yahoo Finance via yfinance (unofficial; split-adjusted, not dividend-adjusted).
-  Avg daily $ volume = average of close &times; volume over the 20 sessions before the signal day.
+  <span id="foot2"></span>
   RSI is Wilder&rsquo;s 14-day RSI. &ldquo;vs 20 EMA&rdquo; is how far the close sits above its 20-day EMA. RS rank is the percentile (0&ndash;99) of the 6-month return among all stocks scanned, 99 being the strongest.
   The 1-month chart has one bar per session (21 sessions): each bar is the return of that day&rsquo;s close vs the close one month before the last bar, green above that level and red below it.
   For information only, not investment advice.</p>
@@ -430,7 +561,8 @@ TEMPLATE = r"""<!doctype html>
 <div id="pv" class="pv" hidden></div>
 <script>
 const DATA = __DATA__;
-const ROWS = DATA.rows, META = DATA.meta;
+const MK = DATA.markets;
+let CUR = null, ROWS = [], META = null, CFG = null;
 const DEF = {n: 200, adv: 10, px: 5, cap: 15, top: 20};
 const PRESETS = [20, 50, 100, 150, 200, 252];
 const COLS = [
@@ -449,18 +581,19 @@ const $ = id => document.getElementById(id);
 const num = id => { const s = $(id).value.trim(); if (s === "") return null; const v = parseFloat(s); return isNaN(v) ? null : v; };
 const sort = {k: "chg", asc: false};
 
-for (const r of ROWS) r.idxs = r.idx.join(" ");
+for (const code in MK) for (const r of MK[code].rows) r.idxs = r.idx.join(" ");
 
-function setDefaults() {
-  $("n").value = DEF.n; $("adv").value = DEF.adv; $("px").value = DEF.px;
-  $("cap").value = DEF.cap; $("top").value = DEF.top;
-  for (const id of ["rmin", "rmax", "ext", "rv", "rs"]) $(id).value = "";
+function setMarketDefaults() {
+  $("adv").value = DEF.adv; $("px").value = DEF.px; $("cap").value = DEF.cap;
   document.querySelectorAll(".idx").forEach(e => e.checked = true);
+}
+function setDefaults() {
+  $("n").value = DEF.n; $("top").value = DEF.top;
+  setMarketDefaults();
+  for (const id of ["rmin", "rmax", "ext", "rv", "rs"]) $(id).value = "";
 }
 
 function buildStatic() {
-  $("sub").textContent = "Session of " + META.date + " · refreshed " + META.generated;
-  $("s-scanned").textContent = META.scanned.toLocaleString("en-US");
   const pre = $("presets");
   for (const n of PRESETS) {
     const b = document.createElement("button");
@@ -468,7 +601,28 @@ function buildStatic() {
     b.addEventListener("click", () => { $("n").value = n; update(); });
     pre.appendChild(b);
   }
-  const box = $("indices");
+  const tabs = $("tabs");
+  for (const code of DATA.order) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.dataset.m = code;
+    b.textContent = MK[code].meta.cfg.name;
+    b.addEventListener("click", () => setMarket(code));
+    tabs.appendChild(b);
+  }
+  tabs.hidden = DATA.order.length < 2;
+  for (const id of ["n", "adv", "px", "cap", "rmin", "rmax", "ext", "rv", "rs"]) $(id).addEventListener("input", update);
+  $("top").addEventListener("change", update);
+  $("reset").addEventListener("click", () => { setDefaults(); update(); });
+}
+
+function setMarket(code) {
+  CUR = code; META = MK[code].meta; ROWS = MK[code].rows; CFG = META.cfg;
+  DEF.adv = CFG.defaults.adv; DEF.px = CFG.defaults.px; DEF.cap = CFG.defaults.cap;
+  document.querySelectorAll("#tabs .tab").forEach(b => b.setAttribute("aria-selected", b.dataset.m === code ? "true" : "false"));
+  $("l-adv").textContent = CFG.advLabel; $("l-px").textContent = CFG.pxLabel;
+  $("sub").textContent = "Session of " + META.date + " · refreshed " + META.generated;
+  $("s-scanned").textContent = META.scanned.toLocaleString("en-US");
+  const box = $("indices"); box.replaceChildren();
   for (const ix of META.indices) {
     const l = document.createElement("label"); l.className = "chk";
     const c = document.createElement("input"); c.type = "checkbox"; c.className = "idx"; c.value = ix.code; c.checked = true;
@@ -476,26 +630,23 @@ function buildStatic() {
     l.appendChild(c); l.appendChild(document.createTextNode(ix.label + " (" + ix.count + ")"));
     box.appendChild(l);
   }
-  let foot = "Universe: " + META.indices.map(i => i.label).join(", ") + ".";
-  $("foot").textContent = foot;
-  if (META.failed.length) {
-    const w = document.createElement("span"); w.className = "warn";
-    w.textContent = " Not loaded on this run: " + META.failed.join(", ") + ".";
-    $("foot").appendChild(w);
-  }
-  for (const n of META.notes || []) {
-    const w = document.createElement("span"); w.className = "warn"; w.textContent = " " + n;
-    $("foot").appendChild(w);
-  }
-  for (const id of ["n", "adv", "px", "cap", "rmin", "rmax", "ext", "rv", "rs"]) $(id).addEventListener("input", update);
-  $("top").addEventListener("change", update);
-  $("reset").addEventListener("click", () => { setDefaults(); update(); });
+  const foot = $("foot"); foot.replaceChildren();
+  foot.appendChild(document.createTextNode("Universe: " + META.indices.map(i => i.label).join(", ") + "."));
+  const warn = txt => { const w = document.createElement("span"); w.className = "warn"; w.textContent = " " + txt; foot.appendChild(w); };
+  if (META.failed.length) warn("Not loaded on this run: " + META.failed.join(", ") + ".");
+  for (const n of META.notes || []) warn(n);
+  if (META.stale) warn(META.stale);
+  $("foot2").textContent = CFG.footNote;
+  setMarketDefaults();
+  try { localStorage.setItem("market", code); } catch (e) {}
+  try { history.replaceState(null, "", "#" + code.toLowerCase()); } catch (e) {}
+  update();
 }
 
 function matches() {
   const N = parseInt($("n").value, 10);
   if (!(N >= META.minLookback)) return null;
-  const minAdv = (parseFloat($("adv").value) || 0) * 1e6;
+  const minAdv = (parseFloat($("adv").value) || 0) * CFG.advFactor;
   const minPx = parseFloat($("px").value) || 0;
   const capRaw = $("cap").value.trim();
   const cap = capRaw === "" || isNaN(parseFloat(capRaw)) ? Infinity : parseFloat(capRaw);
@@ -539,7 +690,9 @@ function sparkCell(vals, m1) {
   });
   const td = document.createElement("td"); td.appendChild(svg); return td;
 }
-const fmt2 = x => x.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmt2 = x => x.toLocaleString(CFG.locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtAdv = v => CFG.currency + (v / CFG.advFactor).toLocaleString(CFG.locale, {minimumFractionDigits: 1, maximumFractionDigits: 1})
+  + (CFG.advUnit === "Cr" ? " Cr" : CFG.advUnit);
 
 function levelFor(steps, N) {
   let v = null;
@@ -552,7 +705,7 @@ function svgEl(tag, attrs, parent) {
   if (parent) parent.appendChild(e);
   return e;
 }
-const fmtPx = v => v.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtPx = v => v.toLocaleString(CFG.locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 function drawPreview(r, N) {
   const cx = r.cx, n = cx.c.length;
@@ -608,7 +761,7 @@ function showPv(r, x, y) {
   pvBox.replaceChildren();
   const hd = document.createElement("div"); hd.className = "hd";
   const b = document.createElement("b"); b.textContent = r.sym; hd.appendChild(b);
-  hd.appendChild(document.createTextNode("  " + r.name + "  ·  " + fmtPx(r.close) + "  (+" + r.chg.toFixed(2) + "%)"));
+  hd.appendChild(document.createTextNode("  " + r.name + "  ·  " + CFG.currency + fmtPx(r.close) + "  (+" + r.chg.toFixed(2) + "%)"));
   const lg = document.createElement("div"); lg.className = "lg";
   for (const [txt, css] of [["20 EMA", "border-color:var(--e20)"], ["50 EMA", "border-color:var(--e50)"],
                             ["breakout level", "border-top-style:dashed;border-color:var(--fg)"]]) {
@@ -632,6 +785,7 @@ window.addEventListener("scroll", hidePv, true);
 
 function update() {
   hidePv();
+  const ac = COLS.find(c => c.k === "adv"); ac.t = CFG.advHeader; ac.tip = CFG.advTip;
   const N = parseInt($("n").value, 10);
   document.querySelectorAll("#presets .chip").forEach(b => b.classList.toggle("on", +b.dataset.n === N));
   $("rule").textContent = N >= META.minLookback
@@ -679,7 +833,8 @@ function update() {
     tr.appendChild(cell(i + 1));
     const s = document.createElement("td");
     const a = document.createElement("a");
-    a.href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(r.sym);
+    const tv = CFG.tvPrefix ? CFG.tvPrefix + r.sym.replace(/[&-]/g, "_") : r.sym;   // TradingView writes M&M as NSE:M_M
+    a.href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(tv).replace("%3A", ":");
     a.target = "_blank"; a.rel = "noopener";
     const b = document.createElement("b"); b.textContent = r.sym; a.appendChild(b);
     const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = r.name;
@@ -694,36 +849,62 @@ function update() {
     tr.appendChild(cell((r.ext20 >= 0 ? "+" : "") + r.ext20.toFixed(1) + "%"));
     tr.appendChild(cell(r.rs === null ? "—" : String(r.rs)));
     tr.appendChild(cell(r.rvol.toFixed(1) + "×"));
-    tr.appendChild(cell("$" + (r.adv / 1e6).toFixed(1) + "M"));
+    tr.appendChild(cell(fmtAdv(r.adv)));
     tr.appendChild(cell((r.n1 >= r.bars ? "≥ " : "") + r.n1));
     tb.appendChild(tr);
   });
 }
 
-buildStatic(); setDefaults(); update();
+buildStatic(); setDefaults();
+(function () {
+  let start = location.hash.replace("#", "").toUpperCase();
+  if (!MK[start]) {
+    start = null;
+    try { const saved = localStorage.getItem("market"); if (saved && MK[saved]) start = saved; } catch (e) {}
+  }
+  setMarket(start || DATA.order[0]);
+})();
 </script>
 </body>
 </html>
 """
 
 
-def render(rows: list[dict], meta: dict) -> str:
-    payload = json.dumps({"rows": rows, "meta": meta}, separators=(",", ":")).replace("<", "\\u003c")
+def render(markets: dict[str, dict]) -> str:
+    order = [c for c in MARKETS if c in markets]
+    payload = json.dumps({"markets": markets, "order": order}, separators=(",", ":")).replace("<", "\\u003c")
     return TEMPLATE.replace("__DATA__", payload)
 
 
-# ------------------------------------------------------------------- main ---
-def main() -> int:
-    cons, loaded = load_constituents()
-    prices = download_prices(cons["yf"].tolist())
-    meta_by_yf = cons.set_index("yf")
+# ---------------------------------------------------------------- markets ---
+def page_cfg(code: str) -> dict:
+    return {k: v for k, v in MARKETS[code].items() if k not in ("close_utc_hour", "min_tickers")}
 
+
+def load_universe(code: str):
+    return load_constituents() if code == "US" else load_india_constituents()
+
+
+def expected_sources(code: str, loaded: dict) -> list[tuple[str, str]]:
+    if code == "US":
+        return [(c, label) for c, label, _, _ in SOURCES]
+    if NSE_ALL[0] in loaded:                       # the combined list covered whatever was missing
+        return []
+    return [(c, label) for c, label, _, _ in NSE_LISTS]
+
+
+def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) -> dict:
+    """Screen one market's stocks. Session date and RS ranks are computed within the market."""
+    cfg = MARKETS[code]
+    meta_by_yf = cons.set_index("yf")
     rows: list[dict] = []
     dates: list[str] = []
     ret6: dict[str, tuple[str, float]] = {}
     scanned = 0
     for yf_sym, df in prices.items():
-        df = drop_incomplete_today(df)
+        if yf_sym not in meta_by_yf.index:
+            continue
+        df = drop_incomplete_today(df, cfg["close_utc_hour"])
         if len(df) < MIN_BARS:
             continue
         scanned += 1
@@ -738,9 +919,8 @@ def main() -> int:
             st.update(yf=yf_sym, sym=m["symbol"], name=m["name"], sector=m["sector"], idx=list(m["idx"]))
             rows.append(st)
 
-    if scanned < MIN_TICKERS:
-        print(f"Only {scanned} tickers returned data; refusing to publish a partial page.", file=sys.stderr)
-        return 1
+    if scanned < cfg["min_tickers"]:
+        raise RuntimeError(f"only {scanned} tickers returned data (need {cfg['min_tickers']})")
 
     data_date = pd.Series(dates).mode().iloc[0]        # ignore stragglers with stale last bars
     rows = [r for r in rows if r.pop("date") == data_date]
@@ -754,12 +934,59 @@ def main() -> int:
         "scanned": scanned,
         "minLookback": MIN_LOOKBACK,
         "indices": [{"code": c, "label": v["label"], "count": v["count"]} for c, v in loaded.items()],
-        "failed": [label for code, label, _, _ in SOURCES if code not in loaded],
+        "failed": [label for c, label in expected_sources(code, loaded) if c not in loaded],
         "notes": [v["note"] for v in loaded.values() if v.get("note")],
+        "cfg": page_cfg(code),
     }
+    return {"rows": rows, "meta": meta}
+
+
+def cache_path(code: str) -> Path:
+    return OUT_PATH.parent / f"market_{code.lower()}.json"
+
+
+def save_cache(code: str, payload: dict) -> None:
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(render(rows, meta), encoding="utf-8")
-    print(f"Scanned {scanned}; {len(rows)} stocks are breakouts for at least one lookback; session {data_date}")
+    cache_path(code).write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+
+
+def load_cache(code: str) -> dict | None:
+    try:
+        data = json.loads(cache_path(code).read_text(encoding="utf-8"))
+        if isinstance(data, dict) and "rows" in data and "meta" in data:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+# ------------------------------------------------------------------- main ---
+def main() -> int:
+    payloads: dict[str, dict] = {}
+    refreshed = 0
+    for code, cfg in MARKETS.items():
+        try:
+            cons, loaded = load_universe(code)
+            prices = download_prices(cons["yf"].tolist())
+            payloads[code] = process_market(code, cons, prices, loaded)
+            save_cache(code, payloads[code])           # last good result, reused if a later refresh fails
+            refreshed += 1
+            m = payloads[code]["meta"]
+            print(f"{cfg['name']}: scanned {m['scanned']}; {len(payloads[code]['rows'])} stocks are breakouts "
+                  f"for at least one lookback; session {m['date']}")
+        except Exception as e:
+            print(f"WARNING: {cfg['name']} could not be refreshed: {e}", file=sys.stderr)
+            cached = load_cache(code)
+            if cached:
+                cached["meta"]["stale"] = (f"{cfg['name']} could not be refreshed on this run, so this is the "
+                                           f"session of {cached['meta']['date']}.")
+                payloads[code] = cached
+
+    if not refreshed:
+        print("No market could be refreshed; leaving the page unchanged.", file=sys.stderr)
+        return 1
+    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OUT_PATH.write_text(render(payloads), encoding="utf-8")
     return 0
 
 
