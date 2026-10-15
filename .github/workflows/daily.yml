@@ -2,14 +2,18 @@ name: Daily breakout screen (US + India)
 
 on:
   schedule:
-    # Each run refreshes BOTH markets; the page only screens a day once its candle is final
-    # (15 min after the close, worked out from real closing times, so daylight saving is handled).
-    # India: NSE closes 15:30 IST = 10:00 UTC. Run 10:30 UTC = 16:00 IST.
+    # Scheduled runs on GitHub are best-effort and sometimes start late or get skipped, so each market
+    # has several triggers after its close. A run with nothing new changes nothing (no commit, no banner).
+    # The page only screens a day once its candle is final (15 min after the close; daylight saving is handled).
+    # India: NSE closes 15:30 IST = 10:00 UTC  ->  16:00, 17:00 and 18:00 IST
     - cron: "30 10 * * 1-5"
-    # US: closes 20:00 UTC in summer time, 21:00 UTC in winter time, so there are two runs;
-    # whichever one comes after the close does the work, the other simply changes nothing.
+    - cron: "30 11 * * 1-5"
+    - cron: "30 12 * * 1-5"
+    # US: closes 20:00 UTC in summer time, 21:00 UTC in winter time -> triggers for both
     - cron: "35 20 * * 1-5"
     - cron: "35 21 * * 1-5"
+    - cron: "35 22 * * 1-5"
+    - cron: "35 23 * * 1-5"
   workflow_dispatch: {}   # lets you run it by hand from the Actions tab
 
 permissions:
