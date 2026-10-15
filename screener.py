@@ -1008,8 +1008,18 @@ def cache_path(code: str) -> Path:
     return OUT_PATH.parent / f"market_{code.lower()}.json"
 
 
+def payload_sig(payload: dict) -> str:
+    """Fingerprint of a market's results, ignoring the refresh time, so a re-run with nothing new changes nothing."""
+    import hashlib
+    body = {"rows": payload["rows"], "meta": {k: v for k, v in payload["meta"].items() if k != "generated"}}
+    return hashlib.sha1(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def save_cache(code: str, payload: dict) -> None:
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    old = load_cache(code)
+    if old and payload_sig(old) == payload_sig(payload):
+        return                                         # nothing new: keep the file as is (no pointless commit)
     cache_path(code).write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 
 
@@ -1048,12 +1058,20 @@ def main() -> int:
     if not refreshed:
         print("No market could be refreshed; leaving the page unchanged.", file=sys.stderr)
         return 1
+    sig = "|".join(f"{c}:{payload_sig(p)}" for c, p in payloads.items())
+    vpath = OUT_PATH.parent / "version.json"
+    try:
+        if OUT_PATH.exists() and json.loads(vpath.read_text(encoding="utf-8")).get("sig") == sig:
+            print("Nothing new since the last run; page left unchanged.")
+            return 0
+    except Exception:
+        pass
     global BUILT
     BUILT = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(render(payloads), encoding="utf-8")
     (OUT_PATH.parent / "version.json").write_text(            # tiny file the page polls to learn about new data
-        json.dumps({"built": BUILT, "sessions": {c: p["meta"]["date"] for c, p in payloads.items()}}), encoding="utf-8")
+        json.dumps({"built": BUILT, "sig": sig, "sessions": {c: p["meta"]["date"] for c, p in payloads.items()}}), encoding="utf-8")
     return 0
 
 
