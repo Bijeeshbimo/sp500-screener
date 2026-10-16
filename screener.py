@@ -44,7 +44,8 @@ SPARK_DAYS = 21             # sessions in the 1-month bar chart (about one tradi
 RSI_PERIOD = 14             # Wilder RSI length
 EMA_FAST = 20               # EMA used for the "extension" measure
 RS_LOOKBACK = 126          # sessions (about 6 months) for the relative-strength rank
-EMA_SLOW = 50               # second EMA drawn on the hover chart
+EMA_SLOW = 50                # second EMA drawn on the hover chart
+ATR_PERIOD = 14
 SETTLE_MINUTES = 15       # wait this long after the close before trusting the day's final candle
 PREVIEW_DAYS = 126          # sessions of candles shown in the hover chart
 
@@ -62,7 +63,7 @@ MARKETS = {
         "tz": "America/New_York", "close": (16, 0), "min_tickers": 400,
     },
     "IN": {
-        "name": "India (NSE)", "currency": "\u20b9", "advUnit": "Cr", "advFactor": 1e7, "locale": "en-IN", "tvPrefix": "NSE:",
+        "name": "India (NSE)", "currency": "\u20b9", "advUnit": "Cr", "advFactor": 1e7, "locale": "en-IN", "tvPrefix": "NSE:", "bands": [5, 10, 20],
         "advLabel": "Min avg daily turnover (\u20b9 crore)", "pxLabel": "Min price (\u20b9)",
         "advHeader": "Avg turnover (Cr)", "advTip": "Average daily turnover in \u20b9 crore (close x volume), previous 20 sessions",
         "footNote": "Avg daily turnover = average of close \u00d7 volume over the 20 sessions before the signal day, in \u20b9 crore "
@@ -193,6 +194,26 @@ def breakout_stats(df: pd.DataFrame) -> dict | None:
         "d0": df.index[-pv].strftime("%Y-%m-%d"), "d1": df.index[-1].strftime("%Y-%m-%d"),
     }
     rsi = rsi_wilder(c)
+
+    # --- extra context for the "insights" on the page (none of this depends on the lookback N) ---
+    lo = df["Low"].to_numpy(dtype=float)
+    o_ = df["Open"].to_numpy(dtype=float)
+    pc = np.r_[c[0], c[:-1]]
+    tr = np.maximum.reduce([h - lo, np.abs(h - pc), np.abs(lo - pc)])
+    atr = float(tr[-1 - ATR_PERIOD:-1].mean())                         # average true range of the 14 sessions before today
+    span = h[-1] - lo[-1]
+    prior = slice(-1 - 252, -1)                                         # the previous ~52 weeks
+    base_lo = float(lo[-21:-1].min())
+    x = {
+        "cp": round(float((c[-1] - lo[-1]) / span * 100.0), 1) if span > 0 else None,   # where the close sits in the day's range
+        "gap": round((float(o_[-1]) / float(c[-2]) - 1.0) * 100.0, 2),                # open vs yesterday's close
+        "atr": round(atr, 2),
+        "atrp": round(atr / float(c[-2]) * 100.0, 2) if c[-2] > 0 else None,
+        "rg": round(float(tr[-1]) / atr, 1) if atr > 0 else None,                      # today's range in units of normal
+        "h52": round(float(h[prior].max()), 2), "l52": round(float(lo[prior].min()), 2),
+        "s200": round(float(c[-200:].mean()), 2) if n >= 200 else None,
+        "b20": round((float(h[-21:-1].max()) / base_lo - 1.0) * 100.0, 1) if base_lo > 0 else None,   # 20-day range before today
+    }
     return {
         "date": df.index[-1].strftime("%Y-%m-%d"),
         "close": round(float(c[-1]), 2),
@@ -202,6 +223,7 @@ def breakout_stats(df: pd.DataFrame) -> dict | None:
         "rsi": round(rsi, 1) if rsi is not None else None,
         "ext20": round((float(c[-1]) / ema_fast - 1.0) * 100.0, 1),
         "cx": cx,
+        "x": x,
         "lv": steps,
         "rvol": round(float(v[-1]) / mean_vol, 2) if mean_vol > 0 else 0.0,
         "adv": int(prior_dollar.mean()),
@@ -503,8 +525,31 @@ TEMPLATE = r"""<!doctype html>
         padding:10px 12px 8px; pointer-events:none; }
   .pv[hidden] { display:none; }
   .pv .hd { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .pv .lg { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:11px; color:var(--muted); margin:3px 0 6px; }
-  .pv .sw { display:inline-block; width:14px; border-top:2px solid; vertical-align:middle; margin-right:5px; }
+  .lg { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:11px; color:var(--muted); margin:3px 0 6px; }
+  .sw { display:inline-block; width:14px; border-top:2px solid; vertical-align:middle; margin-right:5px; }
+  .sgs { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .sgs span { margin-right:7px; font-weight:600; font-size:13px; }
+  .sgs .g { color:var(--up); } .sgs .w { color:#c98a00; } .sgs .b { color:var(--down); }
+  ul.ins { list-style:none; margin:8px 0 0; padding:0; font-size:12.5px; line-height:1.4; }
+  ul.ins li { position:relative; padding-left:16px; margin:4px 0; }
+  ul.ins li::before { content:"\25CF"; position:absolute; left:0; top:1px; font-size:10px; color:var(--muted); }
+  ul.ins li.good::before { color:var(--up); } ul.ins li.warn::before { color:#d99a00; } ul.ins li.bad::before { color:var(--down); }
+  .pv .more { font-size:11px; color:var(--muted); margin-top:6px; }
+  tbody tr { cursor:pointer; }
+  tbody tr.sel td { background:var(--chip); }
+  .panel { position:fixed; z-index:60; top:0; right:0; bottom:0; width:430px; max-width:100vw; background:var(--card);
+           border-left:1px solid var(--line); box-shadow:-10px 0 30px rgba(0,0,0,.22); overflow:auto; padding:14px 16px 28px; }
+  .panel[hidden] { display:none; }
+  .panel .top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .panel .top b { font-size:18px; } .panel .top .nm2 { color:var(--muted); font-size:13px; }
+  .panel .x { border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:8px; font-size:18px; line-height:1; padding:4px 10px; cursor:pointer; }
+  .panel h3 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:16px 0 0; }
+  .panel .stop { margin-top:12px; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; background:var(--bg); }
+  .panel .stop b { font-size:16px; }
+  .panel .tally { margin-top:10px; font-size:13px; } .panel .tally .sgs { margin-right:14px; }
+  .panel .links a { margin-right:14px; font-size:13px; }
+  .panel .disc { color:var(--muted); font-size:11.5px; margin-top:16px; }
+  @media (max-width:700px) { .panel { top:auto; height:80vh; width:100vw; border-left:0; border-top:1px solid var(--line); border-radius:14px 14px 0 0; } }
   svg.pvs { display:block; width:100%; height:auto; }
   .pvs .up { fill:var(--up); stroke:var(--up); }
   .pvs .dn { fill:var(--down); stroke:var(--down); }
@@ -558,7 +603,7 @@ TEMPLATE = r"""<!doctype html>
     <p class="rule" id="rule"></p>
   </section>
 
-  <p class="hint">Hover a row (or tab to it) for a 6-month chart: candles, 20 EMA (red), 50 EMA (blue), volume and the breakout level for your lookback.</p>
+  <p class="hint">Hover a row for a 6-month chart (candles, 20 EMA red, 50 EMA blue, volume, breakout level) and the key checks. Click a row to pin the full checklist and a reference stop.</p>
   <div class="tw"><table id="t"><thead><tr id="hr"></tr></thead><tbody id="tb"></tbody></table></div>
 
   <p class="foot" id="foot"></p>
@@ -570,10 +615,11 @@ TEMPLATE = r"""<!doctype html>
 </div>
 
 <div id="pv" class="pv" hidden></div>
+<aside id="panel" class="panel" hidden role="dialog" aria-label="Stock details"></aside>
 <script>
 const DATA = __DATA__;
 const MK = DATA.markets;
-let CUR = null, ROWS = [], META = null, CFG = null;
+let CUR = null, ROWS = [], META = null, CFG = null, PANEL = null;
 const DEF = {n: 200, adv: 10, px: 5, cap: 15, top: 20};
 const PRESETS = [20, 50, 100, 150, 200, 252];
 const COLS = [
@@ -581,6 +627,7 @@ const COLS = [
   {k: "close", t: "Close", num: 1}, {k: "chg", t: "Day %", num: 1},
   {k: "m1", t: "1M %", num: 1, tip: "Return over the last ~21 trading sessions"},
   {k: "spark", t: "1 month", chart: 1, tip: "Bars: return vs the close one month ago, one bar per session. Green = above, red = below."},
+  {k: "_sg", t: "Signals", num: 1, tip: "Rule-based checks: green dots = positive, amber = caution, red = warning. Click a row for the list. Sorting is by positives minus cautions (warnings count double)."},
   {k: "rsi", t: "RSI", num: 1, tip: "Wilder RSI(14) on daily closes"},
   {k: "ext20", t: "vs 20 EMA", num: 1, tip: "How far the close is above its 20-day EMA, in %. A rough guide to stop distance if you trail under the 20 EMA."},
   {k: "rs", t: "RS rank", num: 1, tip: "Percentile (0-99) of the 6-month return among all stocks scanned. 99 = strongest."},
@@ -628,6 +675,7 @@ function buildStatic() {
 }
 
 function setMarket(code) {
+  closePanel();
   CUR = code; META = MK[code].meta; ROWS = MK[code].rows; CFG = META.cfg;
   DEF.adv = CFG.defaults.adv; DEF.px = CFG.defaults.px; DEF.cap = CFG.defaults.cap;
   document.querySelectorAll("#tabs .tab").forEach(b => b.setAttribute("aria-selected", b.dataset.m === code ? "true" : "false"));
@@ -760,6 +808,168 @@ function drawPreview(r, N) {
 }
 
 const pvBox = $("pv");
+
+// ---- insights: plain-language checks worked out from the numbers in each row (observations, not advice) ----
+const SEV = {bad: 0, warn: 1, good: 2, info: 3};
+const todayStr = () => new Date().toISOString().slice(0, 10);
+function daysUntil(iso) { return Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(todayStr() + "T00:00:00Z")) / 864e5); }
+function insights(r, N) {
+  const out = {items: [], stop: null, good: 0, warn: 0, bad: 0};
+  const x = r.x; if (!x) return out;
+  const cur = CFG.currency, cx = r.cx, last = cx.c.length - 1;
+  const add = (g, l, t) => { out.items.push({g, l, t}); if (l !== "info") out[l]++; };
+  const lvl = levelFor(r.lv, N), dayLow = cx.l[last];
+
+  if (lvl !== null) {
+    const over = (r.close / lvl - 1) * 100;
+    if (over < 0.5) add("Breakout", "warn", "Only " + over.toFixed(1) + "% above the " + N + "-session high (" + cur + fmtPx(lvl) + "): a thin margin.");
+    else if (over <= 6) add("Breakout", "good", "Closed " + over.toFixed(1) + "% above the " + N + "-session high (" + cur + fmtPx(lvl) + ").");
+    else add("Breakout", "warn", "Closed " + over.toFixed(1) + "% above the " + N + "-session high: already well past the breakout point.");
+  }
+  if (x.cp !== null) {
+    if (x.cp >= 80) add("Breakout", "good", "Closed near the high of the day (top " + Math.max(1, Math.ceil(100 - x.cp)) + "% of its range): buyers held on to the close.");
+    else if (x.cp <= 50) add("Breakout", "warn", "Closed in the lower half of the day’s range: sellers pushed back late in the session.");
+  }
+  if (x.gap >= 3) {
+    if (x.cp !== null && x.cp < 60) add("Breakout", "warn", "Gapped up " + x.gap.toFixed(1) + "% at the open but faded during the day.");
+    else add("Breakout", "info", "Gapped up " + x.gap.toFixed(1) + "% at the open.");
+  }
+  if (r.rvol >= 1.5) add("Breakout", "good", "Volume " + r.rvol.toFixed(1) + "× normal: real participation behind the move.");
+  else if (r.rvol < 1) add("Breakout", "warn", "Volume only " + r.rvol.toFixed(1) + "× normal: weak confirmation.");
+  if (x.rg !== null && x.rg >= 2.5) add("Breakout", "info", "Today’s range was " + x.rg.toFixed(1) + "× its normal size.");
+  if (x.b20 !== null && x.atrp) {
+    if (x.b20 / x.atrp <= 4) add("Breakout", "good", "Quiet 20-day base (range " + x.b20.toFixed(1) + "%) before the move.");
+  }
+  if (r.m1 >= 35) add("Breakout", "warn", "Already up " + r.m1.toFixed(0) + "% in a month: extended.");
+
+  const e1 = cx.e1[last], e2 = cx.e2[last];
+  if (r.close > e1 && e1 > e2) add("Trend", "good", "Price is above the 20 EMA and the 20 EMA is above the 50 EMA: trend stacked up.");
+  else if (r.close < e2) add("Trend", "warn", "Price is still below the 50 EMA: the longer trend is not up yet.");
+  else add("Trend", "warn", "20 and 50 EMAs are not in bullish order yet.");
+  if (x.s200 !== null) {
+    if (e2 > x.s200) add("Trend", "good", "50 EMA is above the 200-day average.");
+    else add("Trend", "warn", "50 EMA is below the 200-day average: long-term trend not up.");
+  }
+  if (r.close > x.h52) add("Trend", "good", "New 52-week high.");
+  else {
+    const d = (r.close / x.h52 - 1) * 100;
+    if (d < -25) add("Trend", "warn", "Still " + (-d).toFixed(0) + "% below its 52-week high: a recovery move rather than a fresh high.");
+    else add("Trend", "info", (-d).toFixed(1) + "% below its 52-week high.");
+  }
+  if (r.rs !== null) {
+    if (r.rs >= 80) add("Trend", "good", "Strong relative strength: RS rank " + r.rs + " (ahead of " + r.rs + "% of stocks scanned).");
+    else if (r.rs <= 40) add("Trend", "warn", "Weak relative strength: RS rank " + r.rs + ".");
+    else add("Trend", "info", "RS rank " + r.rs + ".");
+  }
+
+  if (r.rsi !== null && r.rsi >= 80) add("Risk", "warn", "RSI " + r.rsi.toFixed(0) + ": stretched; pullbacks are common after readings this high.");
+  if (r.ext20 >= 10) add("Risk", "warn", r.ext20.toFixed(1) + "% above the 20 EMA: extended from its short-term average.");
+  if (lvl !== null) {
+    const stop = Math.max(lvl, dayLow), risk = (r.close / stop - 1) * 100, am = x.atr > 0 ? (r.close - stop) / x.atr : null;
+    out.stop = {px: stop, risk, atrMult: am};
+    if (am !== null && am > 3) add("Risk", "warn", "Reference stop is " + am.toFixed(1) + "× the normal daily range away (" + risk.toFixed(1) + "%): wide.");
+    else add("Risk", "info", "Reference stop is " + risk.toFixed(1) + "% below the close" + (am !== null ? " (" + am.toFixed(1) + "× the normal daily range)." : "."));
+  }
+  if (r.earn) {
+    const d = daysUntil(r.earn), when = d < 0 ? "just reported" : d === 0 ? "today" : d === 1 ? "tomorrow" : "in " + d + " days";
+    if (d >= 0 && d <= 2) add("Risk", "bad", "Earnings " + when + " (" + r.earn + "): a gap on results can jump straight past any stop.");
+    else if (d >= 3 && d <= 10) add("Risk", "warn", "Earnings " + when + " (" + r.earn + ").");
+    else add("Risk", "info", "Next earnings: " + r.earn + " (" + when + ").");
+  } else add("Risk", "info", "No earnings date available: check before entering.");
+
+  if (r.chg >= 40) add("Data check", "bad", "Up " + r.chg.toFixed(0) + "% in one day: check for a split, bonus issue or data error before trusting this.");
+  if (CFG.bands && x.cp !== null && x.cp >= 99) {
+    for (const bnd of CFG.bands) if (r.chg >= bnd - 0.6 && r.chg <= bnd + 0.1)
+      add("Data check", "warn", "Closed at the day’s high, up " + r.chg.toFixed(1) + "%, right at the " + bnd + "% price band: it may have hit upper circuit, so buying may not have been possible.");
+  }
+  out.items.sort((a, b) => SEV[a.l] - SEV[b.l]);
+  return out;
+}
+function insList(items, limit) {
+  const ul = document.createElement("ul"); ul.className = "ins";
+  for (const it of items.slice(0, limit || items.length)) {
+    const li = document.createElement("li"); li.className = it.l; li.textContent = it.t; ul.appendChild(li);
+  }
+  return ul;
+}
+function sigCell(ins) {
+  const td = document.createElement("td"); td.className = "sgs";
+  const bits = [["g", ins.good, "positive"], ["w", ins.warn, "caution"], ["b", ins.bad, "warning"]].filter(b => b[1] > 0);
+  if (!bits.length) { td.textContent = "—"; return td; }
+  for (const [cls, n, word] of bits) {
+    const s = document.createElement("span"); s.className = cls; s.textContent = "● " + n; s.title = n + " " + word + (n > 1 ? "s" : "") ; td.appendChild(s);
+  }
+  td.title = ins.good + " positive · " + ins.warn + " caution · " + ins.bad + " warning. Click the row for details.";
+  return td;
+}
+function legendEl() {
+  const lg = document.createElement("div"); lg.className = "lg";
+  for (const [txt, css] of [["20 EMA", "border-color:var(--e20)"], ["50 EMA", "border-color:var(--e50)"],
+                            ["breakout level", "border-top-style:dashed;border-color:var(--fg)"]]) {
+    const s = document.createElement("span"), sw = document.createElement("i");
+    sw.className = "sw"; sw.style.cssText = css; s.appendChild(sw); s.appendChild(document.createTextNode(txt)); lg.appendChild(s);
+  }
+  return lg;
+}
+const yahooUrl = r => "https://finance.yahoo.com/quote/" + encodeURIComponent(CFG.bands ? r.sym + ".NS" : r.sym.replace(".", "-"));
+const tvUrl = r => "https://www.tradingview.com/chart/?symbol=" +
+  encodeURIComponent(CFG.tvPrefix ? CFG.tvPrefix + r.sym.replace(/[&-]/g, "_") : r.sym).replace("%3A", ":");   // TradingView writes M&M as NSE:M_M
+
+function renderPanel() {
+  const box = $("panel"), r = PANEL.r, N = parseInt($("n").value, 10);
+  box.replaceChildren();
+  const top = document.createElement("div"); top.className = "top";
+  const l = document.createElement("div");
+  const b = document.createElement("b"); b.textContent = r.sym; l.appendChild(b);
+  const nm = document.createElement("div"); nm.className = "nm2"; nm.textContent = r.name + (r.sector ? " · " + r.sector : ""); l.appendChild(nm);
+  const px = document.createElement("div"); px.textContent = CFG.currency + fmtPx(r.close) + "  (+" + r.chg.toFixed(2) + "% today)"; l.appendChild(px);
+  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Close details"); x.id = "panel-x";
+  x.addEventListener("click", closePanel);
+  top.appendChild(l); top.appendChild(x); box.appendChild(top);
+  box.appendChild(legendEl()); box.appendChild(drawPreview(r, N));
+  if (N < META.minLookback || isNaN(N)) return;
+  const ins = insights(r, N);
+  const ty = document.createElement("div"); ty.className = "tally";
+  for (const [cls, n, w] of [["g", ins.good, "positive"], ["w", ins.warn, "caution"], ["b", ins.bad, "warning"]]) {
+    const s = document.createElement("span"); s.className = "sgs"; const i = document.createElement("span"); i.className = cls; i.textContent = "● " + n; s.appendChild(i);
+    s.appendChild(document.createTextNode(" " + w + (n === 1 ? "" : "s"))); ty.appendChild(s);
+  }
+  box.appendChild(ty);
+  if (ins.stop) {
+    const sb = document.createElement("div"); sb.className = "stop";
+    const k = document.createElement("div"); k.textContent = "Reference stop (the higher of the breakout level and the day’s low)"; sb.appendChild(k);
+    const v = document.createElement("b"); v.textContent = CFG.currency + fmtPx(ins.stop.px); sb.appendChild(v);
+    sb.appendChild(document.createTextNode("   " + ins.stop.risk.toFixed(1) + "% below the close" + (ins.stop.atrMult !== null ? " · " + ins.stop.atrMult.toFixed(1) + "× normal daily range" : "")));
+    box.appendChild(sb);
+  }
+  for (const g of ["Breakout", "Trend", "Risk", "Data check"]) {
+    const items = ins.items.filter(i => i.g === g); if (!items.length) continue;
+    const h = document.createElement("h3"); h.textContent = g === "Risk" ? "Risk & timing" : g; box.appendChild(h);
+    box.appendChild(insList(items));
+  }
+  const lk = document.createElement("div"); lk.className = "links"; lk.style.marginTop = "14px";
+  for (const [txt, url] of [["TradingView", tvUrl(r)], ["Yahoo Finance", yahooUrl(r)]]) {
+    const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = txt + " ↗"; lk.appendChild(a);
+  }
+  box.appendChild(lk);
+  const dc = document.createElement("div"); dc.className = "disc";
+  dc.textContent = "Rule-based observations worked out from daily price data, for your own research. Not advice, and not a prediction. The reference stop is a chart level, not a recommendation.";
+  box.appendChild(dc);
+}
+function openPanel(r, tr) {
+  hidePv();
+  PANEL = {r, tr};
+  document.querySelectorAll("#tb tr.sel").forEach(e => e.classList.remove("sel"));
+  if (tr) tr.classList.add("sel");
+  renderPanel(); $("panel").hidden = false; $("panel").scrollTop = 0;
+}
+function closePanel() {
+  if (!PANEL) return;
+  PANEL = null; $("panel").hidden = true;
+  document.querySelectorAll("#tb tr.sel").forEach(e => e.classList.remove("sel"));
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
 function placePv(x, y) {
   const pad = 16, w = pvBox.offsetWidth, h = pvBox.offsetHeight;
   let left = x + pad;
@@ -769,18 +979,23 @@ function placePv(x, y) {
   pvBox.style.left = left + "px"; pvBox.style.top = top + "px";
 }
 function showPv(r, x, y) {
+  if (PANEL) return;                                   // while a stock is pinned the floating preview stays out of the way
   const N = parseInt($("n").value, 10);
   pvBox.replaceChildren();
   const hd = document.createElement("div"); hd.className = "hd";
   const b = document.createElement("b"); b.textContent = r.sym; hd.appendChild(b);
   hd.appendChild(document.createTextNode("  " + r.name + "  ·  " + CFG.currency + fmtPx(r.close) + "  (+" + r.chg.toFixed(2) + "%)"));
-  const lg = document.createElement("div"); lg.className = "lg";
-  for (const [txt, css] of [["20 EMA", "border-color:var(--e20)"], ["50 EMA", "border-color:var(--e50)"],
-                            ["breakout level", "border-top-style:dashed;border-color:var(--fg)"]]) {
-    const s = document.createElement("span"), sw = document.createElement("i");
-    sw.className = "sw"; sw.style.cssText = css; s.appendChild(sw); s.appendChild(document.createTextNode(txt)); lg.appendChild(s);
-  }
+  const lg = legendEl();
   pvBox.appendChild(hd); pvBox.appendChild(lg); pvBox.appendChild(drawPreview(r, N));
+  if (N >= META.minLookback) {
+    const ins = insights(r, N);
+    if (ins.items.length) {
+      const sig = ins.items.filter(i => i.l !== "info");
+      pvBox.appendChild(insList(sig.length ? sig : ins.items, 5));
+      const mr = document.createElement("div"); mr.className = "more";
+      mr.textContent = "Click the row for the full checklist and a reference stop."; pvBox.appendChild(mr);
+    }
+  }
   pvBox.hidden = false;
   placePv(x, y);
 }
@@ -792,6 +1007,8 @@ function attachPv(tr, r) {
   tr.addEventListener("mouseleave", hidePv);
   tr.addEventListener("focus", () => { const b = tr.getBoundingClientRect(); showPv(r, b.left + b.width / 2, b.top + b.height / 2); });
   tr.addEventListener("blur", hidePv);
+  tr.addEventListener("click", e => { if (!e.target.closest("a")) openPanel(r, tr); });
+  tr.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === tr) { e.preventDefault(); openPanel(r, tr); } });
 }
 window.addEventListener("scroll", hidePv, true);
 
@@ -807,6 +1024,7 @@ function update() {
   let list = matches();
   const matched = list ? list.length : 0;
   list = list ? list.slice() : [];
+  for (const r of list) { const i = insights(r, N); r._sg = i.good - i.warn - 2 * i.bad; r._ins = i; }
   const c = COLS.find(x => x.k === sort.k);
   list.sort((a, b) => {
     let x = a[sort.k], y = b[sort.k], r;
@@ -837,7 +1055,9 @@ function update() {
   const tb = $("tb"); tb.replaceChildren();
   if (!list.length) {
     const tr = document.createElement("tr"); const td = cell("No stocks match these settings. Try a shorter lookback or relax the liquidity filter.", "empty");
-    td.colSpan = COLS.length + 1; tr.appendChild(td); tb.appendChild(tr); return;
+    td.colSpan = COLS.length + 1; tr.appendChild(td); tb.appendChild(tr);
+    if (PANEL) renderPanel();
+    return;
   }
   list.forEach((r, i) => {
     const tr = document.createElement("tr");
@@ -857,14 +1077,17 @@ function update() {
     tr.appendChild(cell("+" + r.chg.toFixed(2) + "%", "up"));
     tr.appendChild(cell((r.m1 >= 0 ? "+" : "") + r.m1.toFixed(1) + "%", r.m1 >= 0 ? "up" : "dn"));
     tr.appendChild(sparkCell(r.spark, r.m1));
+    tr.appendChild(sigCell(r._ins));
     tr.appendChild(cell(r.rsi === null ? "—" : r.rsi.toFixed(1)));
     tr.appendChild(cell((r.ext20 >= 0 ? "+" : "") + r.ext20.toFixed(1) + "%"));
     tr.appendChild(cell(r.rs === null ? "—" : String(r.rs)));
     tr.appendChild(cell(r.rvol.toFixed(1) + "×"));
     tr.appendChild(cell(fmtAdv(r.adv)));
     tr.appendChild(cell((r.n1 >= r.bars ? "≥ " : "") + r.n1));
+    if (PANEL && PANEL.r === r) { tr.classList.add("sel"); PANEL.tr = tr; }
     tb.appendChild(tr);
   });
+  if (PANEL) renderPanel();                                 // keep an open panel in step with the lookback
 }
 
 buildStatic(); setDefaults();
@@ -988,8 +1211,15 @@ def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) ->
     data_date = pd.Series(dates).mode().iloc[0]        # ignore stragglers with stale last bars
     rows = [r for r in rows if r.pop("date") == data_date]
     ranks = rs_ranks({k: v for k, (d, v) in ret6.items() if d == data_date})
+    pairs = []
     for r in rows:
-        r["rs"] = ranks.get(r.pop("yf"))
+        yf_sym = r.pop("yf")
+        r["rs"] = ranks.get(yf_sym)
+        pairs.append((r, yf_sym))
+    try:
+        attach_earnings(pairs)
+    except Exception as e:                     # a nice-to-have must never break the run
+        print(f"WARNING: earnings step skipped: {e}", file=sys.stderr)
 
     meta = {
         "date": data_date,
@@ -1002,6 +1232,90 @@ def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) ->
         "cfg": page_cfg(code),
     }
     return {"rows": rows, "meta": meta}
+
+
+# --------------------------------------------------------------- earnings --
+EARNINGS_ENABLED = True
+EARN_BUDGET_SEC = 240        # never spend longer than this asking Yahoo for earnings dates
+EARN_WORKERS = 6
+
+
+def _next_earnings(sym: str, today: dt.date) -> str:
+    """Next earnings date (YYYY-MM-DD) from Yahoo, or '' if none is listed. Raises on a failed request."""
+    import yfinance as yf
+
+    cal = yf.Ticker(sym).calendar
+    dates = cal.get("Earnings Date") if isinstance(cal, dict) else None
+    out = []
+    for d in dates or []:
+        d = d.date() if isinstance(d, dt.datetime) else d
+        if isinstance(d, dt.date) and d >= today - dt.timedelta(days=1):
+            out.append(d)
+    return min(out).isoformat() if out else ""
+
+
+def fetch_earnings(syms: list[str]) -> dict[str, str]:
+    """Best effort: {ticker: 'YYYY-MM-DD' or ''}. Tickers whose request failed are left out. Time-boxed."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    today = dt.datetime.now(dt.timezone.utc).date()
+    deadline = time.monotonic() + EARN_BUDGET_SEC
+    out: dict[str, str] = {}
+
+    def one(sym):
+        if time.monotonic() > deadline:
+            return
+        try:
+            out[sym] = _next_earnings(sym, today)
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=EARN_WORKERS) as pool:
+        list(pool.map(one, syms))
+    return out
+
+
+def attach_earnings(pairs: list[tuple[dict, str]]) -> None:
+    """Add r['earn'] (next earnings date) to each row that has one, using a small cache so most runs
+    ask Yahoo for only a handful of tickers. Failures are silent: the page just omits the flag."""
+    if not EARNINGS_ENABLED or not pairs:
+        return
+    today = dt.datetime.now(dt.timezone.utc).date()
+    path = OUT_PATH.parent / "earnings_cache.json"
+    try:
+        cache = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(cache, dict):
+            cache = {}
+    except Exception:
+        cache = {}
+    orig = dict(cache)
+
+    def fresh(e):
+        try:
+            age = (today - dt.date.fromisoformat(e["f"])).days
+            return age <= 6 and e["d"] >= today.isoformat() if e["d"] else age <= 2
+        except Exception:
+            return False
+
+    need = [yf for _, yf in pairs if not fresh(cache.get(yf, {}))]
+    if need:
+        try:
+            got = fetch_earnings(need)
+        except Exception as e:
+            print(f"WARNING: earnings dates unavailable: {e}", file=sys.stderr)
+            got = {}
+        for yf, d in got.items():
+            cache[yf] = {"d": d, "f": today.isoformat()}
+        print(f"Earnings dates: asked for {len(need)}, received {len(got)}")
+        keep = {k: v for k, v in cache.items() if isinstance(v, dict) and v.get("f", "") >= (today - dt.timedelta(days=30)).isoformat()}
+        if keep != orig:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(keep, separators=(",", ":"), sort_keys=True), encoding="utf-8")
+        cache = keep
+    for r, yf in pairs:
+        e = cache.get(yf)
+        if e and e.get("d"):
+            r["earn"] = e["d"]
 
 
 def cache_path(code: str) -> Path:
@@ -1058,7 +1372,8 @@ def main() -> int:
     if not refreshed:
         print("No market could be refreshed; leaving the page unchanged.", file=sys.stderr)
         return 1
-    sig = "|".join(f"{c}:{payload_sig(p)}" for c, p in payloads.items())
+    import hashlib                                  # the page design is part of the fingerprint, so a new version of this script always republishes
+    sig = hashlib.sha1(TEMPLATE.encode()).hexdigest()[:12] + "|" + "|".join(f"{c}:{payload_sig(p)}" for c, p in payloads.items())
     vpath = OUT_PATH.parent / "version.json"
     try:
         if OUT_PATH.exists() and json.loads(vpath.read_text(encoding="utf-8")).get("sig") == sig:
