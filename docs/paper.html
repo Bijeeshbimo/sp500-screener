@@ -128,6 +128,7 @@ const MKT = { IN: { cur: "₹", loc: "en-IN", name: "India", bench: "^NSEI", ben
               US: { cur: "$", loc: "en-US", name: "US", bench: "^GSPC", benchName: "S&P 500", file: "market_us.json" } };
 const VIEWS = [["dash", "Dashboard"], ["pos", "Positions"], ["ord", "Orders"], ["trd", "Trades"], ["fund", "Funds"], ["set", "Settings"]];
 let M = ls.get("paper-m") === "US" ? "US" : "IN", VIEW = ls.get("paper-v") || "dash", OFILTER = "open";
+let BLK = { total: 0, items: {}, unpriced: 0 };
 let STORE = null, S = { ledger: [], orders: [], fills: [], prices: [], settings: PC.mergeSettings({}) }, PM = {}, ACC = null, SESS = {}, FX = null, SYMS = {};
 
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -232,6 +233,8 @@ const stopOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol ===
 function compute() {
   const lg = S.ledger.filter(r => r.portfolio === M), fl = S.fills.filter(r => r.portfolio === M);
   ACC = PC.buildAccount(lg, fl, PM, MKT[M].bench);
+  BLK = blockedFunds(M);
+  if (BLK.unpriced && !SYMS[M]) symbolList().then(() => render());    // load screener prices for market orders on untraded symbols
 }
 function render() {
   compute();
@@ -241,7 +244,8 @@ function render() {
   $("sub").textContent = `${MKT[M].name} portfolio in ${M === "IN" ? "rupees" : "US dollars"} · ${S.orders.filter(o => o.portfolio === M && o.status === "pending").length} pending order(s) · prices as of ${last || "(none yet)"}`;
   const hasMoney = S.ledger.some(r => r.portfolio === M);
   $("stats").innerHTML = hasMoney ? [
-    ["Equity", money(a.equity), ""], ["Cash", money(a.cash), a.cash < -0.005 ? "dn" : ""], ["Invested", money(a.invested), ""],
+    ["Equity", money(a.equity), ""], ["Cash", money(a.cash), a.cash < -0.005 ? "dn" : ""],
+    ["Blocked on orders", money(BLK.total), ""], ["Available", money(avail()), avail() < -0.005 ? "dn" : ""], ["Invested", money(a.invested), ""],
     ["Net deposits", money(a.netDeposits), ""],
     ["Total P&L", money(a.pnl) + (a.netDeposits > 0 ? ` (${pct(a.pnl / a.netDeposits * 100)})` : ""), sgn(a.pnl)],
     ["Realized", money(a.realized), sgn(a.realized)], ["Charges paid", money(a.fees), ""],
@@ -342,17 +346,19 @@ function viewOrd() {
   const rows = list.map(o => {
     const live = o.status === "pending" || o.status === "waiting";
     const px = o.type === "MARKET" ? "at open" : (o.type === "STOP" ? "stop " : "limit ") + money(o.price);
-    return `<tr><td class="l">${o.created_at ? o.created_at.slice(0, 10) : ""}</td><td>${esc(o.symbol)}${o.parent_id ? '<span class="nm">bracket leg</span>' : ""}</td><td class="${o.side === "BUY" ? "up" : "dn"}">${o.side}</td><td>${num(o.qty)}</td><td>${px}</td>
+    return `<tr><td class="l">${o.created_at ? o.created_at.slice(0, 10) : ""}</td><td>${esc(o.symbol)}${o.parent_id ? '<span class="nm">bracket leg</span>' : ""}</td><td class="${o.side === "BUY" ? "up" : "dn"}">${o.side}</td><td>${num(o.qty)}</td><td>${px}</td><td>${BLK.items[o.id] != null ? money(BLK.items[o.id]) : "\u2013"}</td>
       <td>after ${esc(o.after_date)}${o.expiry ? `<span class="nm">expires ${esc(o.expiry)}</span>` : ""}</td><td>${esc(o.status)}${o.status_note ? `<span class="nm">${esc(o.status_note)}</span>` : ""}</td>
       <td>${live ? `<button class="sm" data-act="editorder" data-id="${o.id}">Edit</button><button class="sm danger" data-act="cancelorder" data-id="${o.id}">Cancel</button>` : `<button class="sm danger" data-act="delorder" data-id="${o.id}">Delete</button>`}</td></tr>`;
   }).join("");
   return `<div class="bar"><button class="primary" data-act="neworder">New order</button>${chips}</div>
-  ${list.length ? `<div class="tw"><table><thead><tr><th class="l">Placed</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Live</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : empty("No orders here.")}
+  ${BLK.unpriced ? `<p class="hint">${BLK.unpriced} pending market buy order(s) have no known price yet, so their funds are not counted.</p>` : ""}
+  ${list.length ? `<div class="tw"><table><thead><tr><th class="l">Placed</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Funds blocked</th><th>Live</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : empty("No orders here.")}
   <div class="card"><b>How orders are filled</b><ul class="ins" style="margin-top:6px">
     <li>A daily job fills orders after each market closes (India: evening IST, US: early morning IST). The page shows results once it has run.</li>
     <li><b>Market</b> fills at the next session&rsquo;s open. <b>Limit</b> buy fills at the open if it is at or below your price, otherwise at your price if the day&rsquo;s low reaches it (sell: mirror).</li>
     <li><b>Stop</b> sell triggers when the low reaches your price. If the stock gaps below it, you are filled at the open, not at your stop. A stop buy mirrors this on the high.</li>
     <li>Bracket legs (stop-loss and target) go live the session after the entry fills and cancel each other. If both could trigger in one session, the stop is assumed to hit first (change in Settings).</li>
+    <li>Like a broker, a buy sets money aside when you place it (quantity &times; price plus estimated charges; market orders use the last known close) and releases it when the order fills, is cancelled or expires. A buy larger than your available funds is refused. If a market order opens higher than the reference price and cash falls short, the engine rejects it.</li>
     <li>No margin and no short selling: a buy without enough cash, or a sell of shares you do not hold, is rejected. A day order uses &ldquo;expiry&rdquo;; otherwise it stays open until you cancel.</li></ul></div>`;
 }
 
@@ -385,7 +391,7 @@ function viewFund() {
     const fy = PC.fyOf(today()), used = S.ledger.filter(r => r.portfolio === "US" && r.kind === "deposit" && PC.fyOf(r.date) === fy).reduce((x, r) => x + (+r.inr || 0), 0);
     lrs = `<div class="card"><b>Remitted abroad this financial year (Apr ${fy} – Mar ${fy + 1}):</b> ${money(used, "IN", 0)} of ₹10,00,000 before 20% TCS applies <span class="mut">(your bank collects TCS; it is adjustable in your income tax return)</span></div>`;
   }
-  return `<div class="bar"><button class="primary" data-act="addfunds">Add funds</button><button data-act="withdraw">Withdraw</button><span class="hint" style="margin:0">Balance: <b>${money(ACC.cash)}</b></span></div>${lrs}
+  return `<div class="bar"><button class="primary" data-act="addfunds">Add funds</button><button data-act="withdraw">Withdraw</button><span class="hint" style="margin:0">Cash: <b>${money(ACC.cash)}</b>${BLK.total ? ` &middot; blocked on orders: <b>${money(BLK.total)}</b> &middot; available: <b>${money(avail())}</b>` : ""}</span></div>${lrs}
   ${lg.length ? `<div class="tw"><table><thead><tr><th class="l">Date</th><th>Type</th><th>Amount (${M === "IN" ? "INR" : "USD"})</th><th class="l">Details</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : empty("No deposits yet.")}`;
 }
 
@@ -464,8 +470,8 @@ function addFundsDialog(existing) {
 }
 function withdrawDialog() {
   const f = dlg(`<h3>Withdraw (${M === "IN" ? "₹" : "$"})</h3><div class="grid"><label>Amount<input name="amt" type="number" step="any" inputmode="decimal"></label><label>Date<input name="date" type="date" value="${today()}"></label></div>
-    <p class="hint">Cash available: ${money(ACC.cash)}. ${M === "US" ? "Withdrawals from Dhan US Stocks are free." : ""}</p><label>Note<input name="note"></label>${acts("Withdraw")}`);
-  f.onsubmit = async e => { e.preventDefault(); const a = nval(f, "amt"); if (!(a > 0)) return err(f, "Enter an amount."); if (a > ACC.cash + 0.005) return err(f, "That is more than the cash available.");
+    <p class="hint">Available to withdraw: ${money(avail())}${BLK.total ? ` (cash ${money(ACC.cash)}, ${money(BLK.total)} blocked on pending orders)` : ""}. ${M === "US" ? "Withdrawals from Dhan US Stocks are free." : ""}</p><label>Note<input name="note"></label>${acts("Withdraw")}`);
+  f.onsubmit = async e => { e.preventDefault(); const a = nval(f, "amt"); if (!(a > 0)) return err(f, "Enter an amount."); if (a > avail() + 0.005) return err(f, "That is more than the available funds" + (BLK.total ? " (some cash is blocked on pending orders)." : "."));
     await guard(f, async () => { await STORE.insert("ledger", { portfolio: M, kind: "withdrawal", date: val(f, "date") || today(), amount: a, inr: M === "IN" ? a : null, note: val(f, "note") || null, meta: {} }); closeDlg(); toast("Withdrawal recorded"); }); };
 }
 function editWithdrawal(r) {
@@ -480,10 +486,28 @@ async function symbolList() {
   try { const d = await (await fetch(MKT[M].file)).json(); SYMS[M] = d.rows.map(r => ({ sym: r.sym, name: r.name, close: r.close })); } catch (e) { SYMS[M] = []; }
   return SYMS[M];
 }
-function refPrice(sym) {
-  const yf = toYf(sym, M), arr = PM[yf]; if (arr && arr.length) return arr[arr.length - 1].close;
-  const s = (SYMS[M] || []).find(x => x.sym === sym); return s ? s.close : null;
+function refPrice(sym, m) {
+  m = m || M;
+  const yf = toYf(sym, m), arr = PM[yf]; if (arr && arr.length) return arr[arr.length - 1].close;
+  const s = (SYMS[m] || []).find(x => x.sym === sym); return s ? s.close : null;
 }
+/* Funds a broker would set aside for pending BUY orders: qty x price + estimated charges.
+   Limit/stop orders use their own price; market orders use the last known close. */
+function blockedFunds(m) {
+  const out = { total: 0, items: {}, unpriced: 0 };
+  for (const o of S.orders) {
+    if (o.portfolio !== m || o.status !== "pending" || o.side !== "BUY") continue;
+    const px = o.type === "MARKET" ? refPrice(o.symbol, m) : +o.price;
+    if (!(px > 0)) { out.unpriced++; continue; }
+    const amt = PC.r2(+o.qty * px + PC.tradeFees(m, "BUY", +o.qty, px, S.settings).total);
+    out.items[o.id] = amt; out.total += amt;
+  }
+  out.total = PC.r2(out.total);
+  return out;
+}
+const avail = () => ACC.cash - BLK.total;
+const needFor = (m, qty, px) => PC.r2(qty * px + PC.tradeFees(m, "BUY", qty, px, S.settings).total);
+const shortMsg = (need, have) => `Not enough available funds: this order needs about ${money(need)} and ${money(have)} is available${BLK.total ? ` (${money(BLK.total)} is blocked on other pending orders)` : ""}.`;
 function orderDialog(pref) {
   pref = pref || {};
   const f = dlg(`<h3>New order (${MKT[M].name})</h3>
@@ -505,7 +529,7 @@ function orderDialog(pref) {
     $("buyonly").hidden = f.elements.side.value !== "BUY";
     const sym = val(f, "sym").toUpperCase(), q = +val(f, "qty") || 0, px = +val(f, "price") || refPrice(sym), s = (SYMS[M] || []).find(x => x.sym === sym);
     let t = s ? `${esc(s.name)} · last screened close ${money(s.close)}. ` : "";
-    if (px && q) { const fee = PC.tradeFees(M, f.elements.side.value, q, px, S.settings, true); t += `About ${money(q * px)} plus ${money(fee.total)} charges. Cash available: ${money(ACC.cash)}.`; }
+    if (px && q) { const fee = PC.tradeFees(M, f.elements.side.value, q, px, S.settings, true); t += `About ${money(q * px)} plus ${money(fee.total)} charges. Available funds: ${money(avail())}${BLK.total ? ` (${money(BLK.total)} blocked on pending orders)` : ""}.`; }
     $("est").innerHTML = t;
   };
   f.addEventListener("input", sync); f.addEventListener("change", sync);
@@ -523,6 +547,10 @@ function orderDialog(pref) {
     if (!val(f, "after")) return err(f, "Pick the date after which the order can fill.");
     if (bstop != null && btgt != null && btgt <= bstop) return err(f, "The target must be above the stop-loss.");
     if (type !== "MARKET" && bstop != null && bstop >= price) return err(f, "The stop-loss must be below your entry price.");
+    if (side === "BUY") {            // a broker sets the money aside when the order is placed
+      const rp = type === "MARKET" ? refPrice(sym) : price;
+      if (rp > 0) { const need = needFor(M, qty, rp); if (need > avail() + 0.005) return err(f, shortMsg(need, avail())); }
+    }
     const base = { portfolio: M, symbol: sym, yf: toYf(sym, M), qty, after_date: val(f, "after"), expiry: val(f, "expiry") || null, tag: val(f, "tag") || null, note: val(f, "note") || null };
     await guard(f, async () => {
       const parent = await STORE.insert("orders", { ...base, side, type, price: type === "MARKET" ? null : price, oco_group: null, parent_id: null, stop_ref: side === "BUY" ? nval(f, "stopref") : null, status: "pending" });
@@ -540,6 +568,10 @@ function editOrderDialog(o) {
     <label>Tag<input name="tag" value="${esc(o.tag || "")}"></label></div><label>Note<input name="note" value="${esc(o.note || "")}"></label>${acts("Save")}`);
   f.onsubmit = async e => { e.preventDefault(); const qty = nval(f, "qty"), price = o.type === "MARKET" ? null : nval(f, "price");
     if (!(qty > 0)) return err(f, "Enter a quantity."); if (o.type !== "MARKET" && !(price > 0)) return err(f, "Enter a price.");
+    if (o.side === "BUY" && o.status === "pending") {
+      const rp = o.type === "MARKET" ? refPrice(o.symbol) : price, have = avail() + (BLK.items[o.id] || 0);
+      if (rp > 0) { const need = needFor(M, qty, rp); if (need > have + 0.005) return err(f, shortMsg(need, have)); }
+    }
     await guard(f, async () => { await STORE.update("orders", o.id, { qty, price, after_date: val(f, "after"), expiry: val(f, "expiry") || null, tag: val(f, "tag") || null, note: val(f, "note") || null }); closeDlg(); toast("Order updated"); }); };
 }
 function stopDialog(sym) {

@@ -95,6 +95,7 @@ A practice account that lives beside the screener: add (pretend) funds, place or
 - **Orders:** market, limit, stop, and brackets (stop-loss + target that cancel each other). A stop that gaps is filled at the open, not at your stop price. If a stop and a target could both trigger in one session, the stop is assumed first (changeable).
 - **Funds:** US top-ups are entered in rupees and show the exchange rate, GST, pay-in charge and the dollars credited (the layout of Dhan's own top-up screen). Every rate and charge can be overridden, and the page tracks the ₹10 lakh yearly TCS threshold.
 - **Charges** follow Dhan's published pricing (India delivery: zero brokerage + statutory charges + DP fee; US: 0.25% per trade, minimum $0.01). All rates are editable in **Settings**.
+- **Blocked funds:** like a broker, a pending buy sets money aside (quantity × price + estimated charges). The page shows cash, blocked and available, refuses a buy larger than the available funds, and releases the money when the order fills, is cancelled or expires.
 - **Editing:** any executed order can be corrected; positions, P&L and the dashboard recalculate from the records.
 - **Dashboard:** equity curve against your deposits, deposit-adjusted return vs Nifty 50 / S&P 500, win rate, profit factor, expectancy, R-multiples, holding times, drawdown, results by tag, and plain-language observations.
 
