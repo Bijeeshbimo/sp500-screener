@@ -1,0 +1,2201 @@
+{
+ "settings": {
+  "in": {
+   "brokerage_pct": 0.0,
+   "stt_pct": 0.1,
+   "stamp_buy_pct": 0.015,
+   "exch_pct": 0.00297,
+   "sebi_pct": 0.0001,
+   "gst_pct": 18.0,
+   "dp_charge": 12.5,
+   "slippage_bps": 0.0
+  },
+  "us": {
+   "brokerage_pct": 0.25,
+   "min_brokerage": 0.01,
+   "other_pct": 0.0,
+   "slippage_bps": 0.0
+  },
+  "fx": {
+   "markup_pct": 1.0,
+   "gst_pct_of_inr": 0.179,
+   "bank_charge_inr": 0.0,
+   "payin_fee_usd": 1.0,
+   "payin_free_from_usd": 100.0,
+   "tcs_enabled": false,
+   "tcs_rate_pct": 20.0,
+   "tcs_threshold_inr": 1000000.0,
+   "fallback_rate": 95.0
+  },
+  "engine": {
+   "same_bar_priority": "stop"
+  }
+ },
+ "cases": [
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 25,
+   "price": 356.55,
+   "dp": false,
+   "fees": {
+    "brokerage": 22.29,
+    "other": 0.0,
+    "total": 22.29
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 223,
+   "price": 117.3,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 26.16,
+    "exchange": 0.78,
+    "sebi": 0.03,
+    "stamp": 3.92,
+    "gst": 0.15,
+    "dp": 0.0,
+    "total": 31.04
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 218,
+   "price": 276.69,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 60.32,
+    "exchange": 1.79,
+    "sebi": 0.06,
+    "stamp": 9.05,
+    "gst": 0.33,
+    "dp": 0.0,
+    "total": 71.55
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 299,
+   "price": 1893.72,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 566.22,
+    "exchange": 16.82,
+    "sebi": 0.57,
+    "stamp": 84.93,
+    "gst": 3.13,
+    "dp": 0.0,
+    "total": 671.67
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 24,
+   "price": 878.68,
+   "dp": false,
+   "fees": {
+    "brokerage": 52.73,
+    "other": 0.0,
+    "total": 52.73
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 293,
+   "price": 487.54,
+   "dp": true,
+   "fees": {
+    "brokerage": 357.13,
+    "other": 0.0,
+    "total": 357.13
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 365,
+   "price": 296.8,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 108.33,
+    "exchange": 3.22,
+    "sebi": 0.11,
+    "stamp": 0.0,
+    "gst": 0.6,
+    "dp": 14.75,
+    "total": 127.01
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 273,
+   "price": 1491.76,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 407.25,
+    "exchange": 12.1,
+    "sebi": 0.41,
+    "stamp": 61.09,
+    "gst": 2.25,
+    "dp": 0.0,
+    "total": 483.1
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 233,
+   "price": 527.83,
+   "dp": true,
+   "fees": {
+    "brokerage": 307.47,
+    "other": 0.0,
+    "total": 307.47
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 269,
+   "price": 1725.4,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 464.13,
+    "exchange": 13.78,
+    "sebi": 0.46,
+    "stamp": 69.62,
+    "gst": 2.56,
+    "dp": 0.0,
+    "total": 550.55
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 2.4054,
+   "price": 260.57,
+   "dp": true,
+   "fees": {
+    "brokerage": 1.57,
+    "other": 0.0,
+    "total": 1.57
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 216,
+   "price": 840.08,
+   "dp": false,
+   "fees": {
+    "brokerage": 453.65,
+    "other": 0.0,
+    "total": 453.65
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 297,
+   "price": 535.74,
+   "dp": true,
+   "fees": {
+    "brokerage": 397.79,
+    "other": 0.0,
+    "total": 397.79
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 1.2604,
+   "price": 627.94,
+   "dp": false,
+   "fees": {
+    "brokerage": 1.98,
+    "other": 0.0,
+    "total": 1.98
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 0.5001,
+   "price": 798.56,
+   "dp": false,
+   "fees": {
+    "brokerage": 1.0,
+    "other": 0.0,
+    "total": 1.0
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 112,
+   "price": 1483.61,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 166.16,
+    "exchange": 4.94,
+    "sebi": 0.17,
+    "stamp": 24.92,
+    "gst": 0.92,
+    "dp": 0.0,
+    "total": 197.11
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 470,
+   "price": 1196.7,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 562.45,
+    "exchange": 16.7,
+    "sebi": 0.56,
+    "stamp": 84.37,
+    "gst": 3.11,
+    "dp": 0.0,
+    "total": 667.19
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 282,
+   "price": 1350.32,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 380.79,
+    "exchange": 11.31,
+    "sebi": 0.38,
+    "stamp": 57.12,
+    "gst": 2.1,
+    "dp": 0.0,
+    "total": 451.7
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 143,
+   "price": 2592.63,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 370.75,
+    "exchange": 11.01,
+    "sebi": 0.37,
+    "stamp": 0.0,
+    "gst": 2.05,
+    "dp": 0.0,
+    "total": 384.18
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 78,
+   "price": 862.04,
+   "dp": true,
+   "fees": {
+    "brokerage": 168.1,
+    "other": 0.0,
+    "total": 168.1
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 302,
+   "price": 1457.46,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 440.15,
+    "exchange": 13.07,
+    "sebi": 0.44,
+    "stamp": 66.02,
+    "gst": 2.43,
+    "dp": 0.0,
+    "total": 522.11
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 10.7151,
+   "price": 5.68,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.16,
+    "other": 0.0,
+    "total": 0.16
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 400,
+   "price": 2699.1,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 1079.64,
+    "exchange": 32.07,
+    "sebi": 1.08,
+    "stamp": 0.0,
+    "gst": 5.97,
+    "dp": 0.0,
+    "total": 1118.76
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 247,
+   "price": 355.92,
+   "dp": true,
+   "fees": {
+    "brokerage": 219.79,
+    "other": 0.0,
+    "total": 219.79
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 57,
+   "price": 1324.68,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 75.51,
+    "exchange": 2.24,
+    "sebi": 0.08,
+    "stamp": 11.33,
+    "gst": 0.42,
+    "dp": 0.0,
+    "total": 89.58
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 78,
+   "price": 5.7,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 0.44,
+    "exchange": 0.01,
+    "sebi": 0.0,
+    "stamp": 0.07,
+    "gst": 0.0,
+    "dp": 0.0,
+    "total": 0.52
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 107,
+   "price": 65.14,
+   "dp": false,
+   "fees": {
+    "brokerage": 17.43,
+    "other": 0.0,
+    "total": 17.43
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 16.9863,
+   "price": 427.79,
+   "dp": false,
+   "fees": {
+    "brokerage": 18.17,
+    "other": 0.0,
+    "total": 18.17
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 15.006,
+   "price": 79.12,
+   "dp": false,
+   "fees": {
+    "brokerage": 2.97,
+    "other": 0.0,
+    "total": 2.97
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 488,
+   "price": 619.62,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 302.37,
+    "exchange": 8.98,
+    "sebi": 0.3,
+    "stamp": 45.36,
+    "gst": 1.67,
+    "dp": 0.0,
+    "total": 358.68
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 153,
+   "price": 2275.64,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 348.17,
+    "exchange": 10.34,
+    "sebi": 0.35,
+    "stamp": 52.23,
+    "gst": 1.92,
+    "dp": 0.0,
+    "total": 413.01
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 15.4502,
+   "price": 817.62,
+   "dp": true,
+   "fees": {
+    "brokerage": 31.59,
+    "other": 0.0,
+    "total": 31.59
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 379,
+   "price": 2455.91,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 930.79,
+    "exchange": 27.64,
+    "sebi": 0.93,
+    "stamp": 139.62,
+    "gst": 5.14,
+    "dp": 0.0,
+    "total": 1104.12
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 15,
+   "price": 1069.91,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 16.05,
+    "exchange": 0.48,
+    "sebi": 0.02,
+    "stamp": 0.0,
+    "gst": 0.09,
+    "dp": 14.75,
+    "total": 31.39
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 8.9722,
+   "price": 234.74,
+   "dp": false,
+   "fees": {
+    "brokerage": 5.27,
+    "other": 0.0,
+    "total": 5.27
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 241,
+   "price": 310.96,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 74.94,
+    "exchange": 2.23,
+    "sebi": 0.07,
+    "stamp": 11.24,
+    "gst": 0.41,
+    "dp": 0.0,
+    "total": 88.89
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 9.6155,
+   "price": 435.42,
+   "dp": true,
+   "fees": {
+    "brokerage": 10.47,
+    "other": 0.0,
+    "total": 10.47
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 385,
+   "price": 2348.0,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 903.98,
+    "exchange": 26.85,
+    "sebi": 0.9,
+    "stamp": 0.0,
+    "gst": 5.0,
+    "dp": 14.75,
+    "total": 951.48
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 1.7807,
+   "price": 391.66,
+   "dp": false,
+   "fees": {
+    "brokerage": 1.75,
+    "other": 0.0,
+    "total": 1.75
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 88,
+   "price": 652.87,
+   "dp": true,
+   "fees": {
+    "brokerage": 143.64,
+    "other": 0.0,
+    "total": 143.64
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 13.1625,
+   "price": 551.19,
+   "dp": true,
+   "fees": {
+    "brokerage": 18.14,
+    "other": 0.0,
+    "total": 18.14
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 498,
+   "price": 47.66,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 23.73,
+    "exchange": 0.7,
+    "sebi": 0.02,
+    "stamp": 3.56,
+    "gst": 0.13,
+    "dp": 0.0,
+    "total": 28.14
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 100,
+   "price": 2959.72,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 295.97,
+    "exchange": 8.79,
+    "sebi": 0.3,
+    "stamp": 0.0,
+    "gst": 1.64,
+    "dp": 14.75,
+    "total": 321.45
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 257,
+   "price": 642.28,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 165.07,
+    "exchange": 4.9,
+    "sebi": 0.17,
+    "stamp": 0.0,
+    "gst": 0.91,
+    "dp": 14.75,
+    "total": 185.8
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 1.265,
+   "price": 490.83,
+   "dp": false,
+   "fees": {
+    "brokerage": 1.56,
+    "other": 0.0,
+    "total": 1.56
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 10.2354,
+   "price": 479.58,
+   "dp": true,
+   "fees": {
+    "brokerage": 12.28,
+    "other": 0.0,
+    "total": 12.28
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 243,
+   "price": 521.18,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 126.65,
+    "exchange": 3.76,
+    "sebi": 0.13,
+    "stamp": 19.0,
+    "gst": 0.7,
+    "dp": 0.0,
+    "total": 150.24
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 272,
+   "price": 2048.58,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 557.21,
+    "exchange": 16.55,
+    "sebi": 0.56,
+    "stamp": 0.0,
+    "gst": 3.08,
+    "dp": 0.0,
+    "total": 577.4
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 142,
+   "price": 749.24,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 106.39,
+    "exchange": 3.16,
+    "sebi": 0.11,
+    "stamp": 15.96,
+    "gst": 0.59,
+    "dp": 0.0,
+    "total": 126.21
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 390,
+   "price": 1687.38,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 658.08,
+    "exchange": 19.54,
+    "sebi": 0.66,
+    "stamp": 0.0,
+    "gst": 3.64,
+    "dp": 14.75,
+    "total": 696.67
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 259,
+   "price": 552.05,
+   "dp": false,
+   "fees": {
+    "brokerage": 357.46,
+    "other": 0.0,
+    "total": 357.46
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 13.9994,
+   "price": 457.96,
+   "dp": true,
+   "fees": {
+    "brokerage": 16.03,
+    "other": 0.0,
+    "total": 16.03
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 201,
+   "price": 376.14,
+   "dp": true,
+   "fees": {
+    "brokerage": 189.02,
+    "other": 0.0,
+    "total": 189.02
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 156,
+   "price": 193.0,
+   "dp": false,
+   "fees": {
+    "brokerage": 75.27,
+    "other": 0.0,
+    "total": 75.27
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 496,
+   "price": 2649.08,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 1313.94,
+    "exchange": 39.02,
+    "sebi": 1.31,
+    "stamp": 0.0,
+    "gst": 7.26,
+    "dp": 0.0,
+    "total": 1361.53
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 250,
+   "price": 1197.78,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 299.45,
+    "exchange": 8.89,
+    "sebi": 0.3,
+    "stamp": 44.92,
+    "gst": 1.65,
+    "dp": 0.0,
+    "total": 355.21
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 264,
+   "price": 2120.44,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 559.8,
+    "exchange": 16.63,
+    "sebi": 0.56,
+    "stamp": 83.97,
+    "gst": 3.09,
+    "dp": 0.0,
+    "total": 664.05
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 1.8893,
+   "price": 177.78,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.84,
+    "other": 0.0,
+    "total": 0.84
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 7.7177,
+   "price": 397.53,
+   "dp": true,
+   "fees": {
+    "brokerage": 7.68,
+    "other": 0.0,
+    "total": 7.68
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 54,
+   "price": 2915.23,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 157.42,
+    "exchange": 4.68,
+    "sebi": 0.16,
+    "stamp": 23.61,
+    "gst": 0.87,
+    "dp": 0.0,
+    "total": 186.74
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 93,
+   "price": 37.55,
+   "dp": false,
+   "fees": {
+    "brokerage": 8.74,
+    "other": 0.0,
+    "total": 8.74
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 11.4334,
+   "price": 136.13,
+   "dp": true,
+   "fees": {
+    "brokerage": 3.9,
+    "other": 0.0,
+    "total": 3.9
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 94,
+   "price": 720.03,
+   "dp": false,
+   "fees": {
+    "brokerage": 169.21,
+    "other": 0.0,
+    "total": 169.21
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 43,
+   "price": 2405.88,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 103.45,
+    "exchange": 3.07,
+    "sebi": 0.1,
+    "stamp": 15.52,
+    "gst": 0.57,
+    "dp": 0.0,
+    "total": 122.71
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 233,
+   "price": 2589.01,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 603.24,
+    "exchange": 17.92,
+    "sebi": 0.6,
+    "stamp": 0.0,
+    "gst": 3.33,
+    "dp": 14.75,
+    "total": 639.84
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 138,
+   "price": 834.15,
+   "dp": true,
+   "fees": {
+    "brokerage": 287.79,
+    "other": 0.0,
+    "total": 287.79
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 93,
+   "price": 789.38,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 73.41,
+    "exchange": 2.18,
+    "sebi": 0.07,
+    "stamp": 11.01,
+    "gst": 0.41,
+    "dp": 0.0,
+    "total": 87.08
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 106,
+   "price": 478.92,
+   "dp": false,
+   "fees": {
+    "brokerage": 126.92,
+    "other": 0.0,
+    "total": 126.92
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 19,
+   "price": 895.06,
+   "dp": false,
+   "fees": {
+    "brokerage": 42.52,
+    "other": 0.0,
+    "total": 42.52
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 420,
+   "price": 323.31,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 135.79,
+    "exchange": 4.03,
+    "sebi": 0.14,
+    "stamp": 0.0,
+    "gst": 0.75,
+    "dp": 0.0,
+    "total": 140.71
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 158,
+   "price": 873.34,
+   "dp": false,
+   "fees": {
+    "brokerage": 344.97,
+    "other": 0.0,
+    "total": 344.97
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 178,
+   "price": 1217.07,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 216.64,
+    "exchange": 6.43,
+    "sebi": 0.22,
+    "stamp": 32.5,
+    "gst": 1.2,
+    "dp": 0.0,
+    "total": 256.99
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 380,
+   "price": 216.81,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 82.39,
+    "exchange": 2.45,
+    "sebi": 0.08,
+    "stamp": 12.36,
+    "gst": 0.46,
+    "dp": 0.0,
+    "total": 97.74
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 17.4172,
+   "price": 51.75,
+   "dp": true,
+   "fees": {
+    "brokerage": 2.26,
+    "other": 0.0,
+    "total": 2.26
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 81,
+   "price": 414.59,
+   "dp": false,
+   "fees": {
+    "brokerage": 83.96,
+    "other": 0.0,
+    "total": 83.96
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 281,
+   "price": 875.42,
+   "dp": false,
+   "fees": {
+    "brokerage": 614.99,
+    "other": 0.0,
+    "total": 614.99
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 172,
+   "price": 552.96,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 95.11,
+    "exchange": 2.82,
+    "sebi": 0.1,
+    "stamp": 0.0,
+    "gst": 0.53,
+    "dp": 0.0,
+    "total": 98.56
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 336,
+   "price": 840.39,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 282.37,
+    "exchange": 8.39,
+    "sebi": 0.28,
+    "stamp": 0.0,
+    "gst": 1.56,
+    "dp": 14.75,
+    "total": 307.35
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 419,
+   "price": 277.1,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 116.1,
+    "exchange": 3.45,
+    "sebi": 0.12,
+    "stamp": 17.42,
+    "gst": 0.64,
+    "dp": 0.0,
+    "total": 137.73
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 202,
+   "price": 1762.47,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 356.02,
+    "exchange": 10.57,
+    "sebi": 0.36,
+    "stamp": 0.0,
+    "gst": 1.97,
+    "dp": 14.75,
+    "total": 383.67
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 44,
+   "price": 567.44,
+   "dp": false,
+   "fees": {
+    "brokerage": 62.42,
+    "other": 0.0,
+    "total": 62.42
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 0.9236,
+   "price": 136.22,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.32,
+    "other": 0.0,
+    "total": 0.32
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 22,
+   "price": 259.85,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 5.72,
+    "exchange": 0.17,
+    "sebi": 0.01,
+    "stamp": 0.86,
+    "gst": 0.03,
+    "dp": 0.0,
+    "total": 6.79
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 232,
+   "price": 340.2,
+   "dp": true,
+   "fees": {
+    "brokerage": 197.32,
+    "other": 0.0,
+    "total": 197.32
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 36,
+   "price": 4.98,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.45,
+    "other": 0.0,
+    "total": 0.45
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 136,
+   "price": 728.68,
+   "dp": true,
+   "fees": {
+    "brokerage": 247.76,
+    "other": 0.0,
+    "total": 247.76
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 9.6063,
+   "price": 761.29,
+   "dp": true,
+   "fees": {
+    "brokerage": 18.29,
+    "other": 0.0,
+    "total": 18.29
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 170,
+   "price": 1801.12,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 306.19,
+    "exchange": 9.09,
+    "sebi": 0.31,
+    "stamp": 45.93,
+    "gst": 1.69,
+    "dp": 0.0,
+    "total": 363.21
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 32,
+   "price": 13.2,
+   "dp": true,
+   "fees": {
+    "brokerage": 1.06,
+    "other": 0.0,
+    "total": 1.06
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 9.32,
+   "price": 638.57,
+   "dp": true,
+   "fees": {
+    "brokerage": 14.88,
+    "other": 0.0,
+    "total": 14.88
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 480,
+   "price": 2934.49,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 1408.56,
+    "exchange": 41.83,
+    "sebi": 1.41,
+    "stamp": 0.0,
+    "gst": 7.78,
+    "dp": 0.0,
+    "total": 1459.58
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 420,
+   "price": 1379.62,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 579.44,
+    "exchange": 17.21,
+    "sebi": 0.58,
+    "stamp": 0.0,
+    "gst": 3.2,
+    "dp": 0.0,
+    "total": 600.43
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 108,
+   "price": 190.43,
+   "dp": true,
+   "fees": {
+    "brokerage": 51.42,
+    "other": 0.0,
+    "total": 51.42
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 261,
+   "price": 121.08,
+   "dp": false,
+   "fees": {
+    "brokerage": 79.01,
+    "other": 0.0,
+    "total": 79.01
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 249,
+   "price": 2693.63,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 670.71,
+    "exchange": 19.92,
+    "sebi": 0.67,
+    "stamp": 0.0,
+    "gst": 3.71,
+    "dp": 0.0,
+    "total": 695.01
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 252,
+   "price": 15.75,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 3.97,
+    "exchange": 0.12,
+    "sebi": 0.0,
+    "stamp": 0.6,
+    "gst": 0.02,
+    "dp": 0.0,
+    "total": 4.71
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 6.912,
+   "price": 655.01,
+   "dp": true,
+   "fees": {
+    "brokerage": 11.32,
+    "other": 0.0,
+    "total": 11.32
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 174,
+   "price": 293.44,
+   "dp": true,
+   "fees": {
+    "brokerage": 127.65,
+    "other": 0.0,
+    "total": 127.65
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 34,
+   "price": 763.37,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 25.95,
+    "exchange": 0.77,
+    "sebi": 0.03,
+    "stamp": 0.0,
+    "gst": 0.14,
+    "dp": 0.0,
+    "total": 26.89
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 220,
+   "price": 325.92,
+   "dp": false,
+   "fees": {
+    "brokerage": 179.26,
+    "other": 0.0,
+    "total": 179.26
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 147,
+   "price": 2504.85,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 368.21,
+    "exchange": 10.94,
+    "sebi": 0.37,
+    "stamp": 55.23,
+    "gst": 2.04,
+    "dp": 0.0,
+    "total": 436.79
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 162,
+   "price": 1311.54,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 212.47,
+    "exchange": 6.31,
+    "sebi": 0.21,
+    "stamp": 0.0,
+    "gst": 1.17,
+    "dp": 14.75,
+    "total": 234.91
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 205,
+   "price": 796.07,
+   "dp": true,
+   "fees": {
+    "brokerage": 407.99,
+    "other": 0.0,
+    "total": 407.99
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 386,
+   "price": 1355.33,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 523.16,
+    "exchange": 15.54,
+    "sebi": 0.52,
+    "stamp": 0.0,
+    "gst": 2.89,
+    "dp": 14.75,
+    "total": 556.86
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 2.5899,
+   "price": 45.98,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.3,
+    "other": 0.0,
+    "total": 0.3
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 134,
+   "price": 269.4,
+   "dp": false,
+   "fees": {
+    "brokerage": 90.25,
+    "other": 0.0,
+    "total": 90.25
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 1.5497,
+   "price": 109.53,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.43,
+    "other": 0.0,
+    "total": 0.43
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 231,
+   "price": 896.83,
+   "dp": true,
+   "fees": {
+    "brokerage": 517.92,
+    "other": 0.0,
+    "total": 517.92
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 47,
+   "price": 1029.16,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 48.37,
+    "exchange": 1.44,
+    "sebi": 0.05,
+    "stamp": 7.26,
+    "gst": 0.27,
+    "dp": 0.0,
+    "total": 57.39
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 292,
+   "price": 778.78,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 227.4,
+    "exchange": 6.75,
+    "sebi": 0.23,
+    "stamp": 0.0,
+    "gst": 1.26,
+    "dp": 14.75,
+    "total": 250.39
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 382,
+   "price": 1151.6,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 439.91,
+    "exchange": 13.07,
+    "sebi": 0.44,
+    "stamp": 0.0,
+    "gst": 2.43,
+    "dp": 14.75,
+    "total": 470.6
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 9.988,
+   "price": 305.71,
+   "dp": true,
+   "fees": {
+    "brokerage": 7.64,
+    "other": 0.0,
+    "total": 7.64
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 128,
+   "price": 816.71,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 104.54,
+    "exchange": 3.1,
+    "sebi": 0.1,
+    "stamp": 15.68,
+    "gst": 0.58,
+    "dp": 0.0,
+    "total": 124.0
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 160,
+   "price": 389.79,
+   "dp": true,
+   "fees": {
+    "brokerage": 155.92,
+    "other": 0.0,
+    "total": 155.92
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 459,
+   "price": 2129.99,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 977.67,
+    "exchange": 29.04,
+    "sebi": 0.98,
+    "stamp": 0.0,
+    "gst": 5.4,
+    "dp": 0.0,
+    "total": 1013.09
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 17.1165,
+   "price": 67.68,
+   "dp": true,
+   "fees": {
+    "brokerage": 2.9,
+    "other": 0.0,
+    "total": 2.9
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 268,
+   "price": 467.36,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 125.25,
+    "exchange": 3.72,
+    "sebi": 0.13,
+    "stamp": 18.79,
+    "gst": 0.69,
+    "dp": 0.0,
+    "total": 148.58
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 21,
+   "price": 497.25,
+   "dp": true,
+   "fees": {
+    "brokerage": 26.11,
+    "other": 0.0,
+    "total": 26.11
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 321,
+   "price": 2887.49,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 926.88,
+    "exchange": 27.53,
+    "sebi": 0.93,
+    "stamp": 0.0,
+    "gst": 5.12,
+    "dp": 0.0,
+    "total": 960.46
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 154,
+   "price": 91.3,
+   "dp": false,
+   "fees": {
+    "brokerage": 35.16,
+    "other": 0.0,
+    "total": 35.16
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 0.2587,
+   "price": 711.86,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.47,
+    "other": 0.0,
+    "total": 0.47
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 125,
+   "price": 580.83,
+   "dp": true,
+   "fees": {
+    "brokerage": 181.51,
+    "other": 0.0,
+    "total": 181.51
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 158,
+   "price": 2115.44,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 334.24,
+    "exchange": 9.93,
+    "sebi": 0.33,
+    "stamp": 0.0,
+    "gst": 1.85,
+    "dp": 14.75,
+    "total": 361.1
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 346,
+   "price": 1497.44,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 518.11,
+    "exchange": 15.39,
+    "sebi": 0.52,
+    "stamp": 77.72,
+    "gst": 2.86,
+    "dp": 0.0,
+    "total": 614.6
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 218,
+   "price": 687.38,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 149.85,
+    "exchange": 4.45,
+    "sebi": 0.15,
+    "stamp": 0.0,
+    "gst": 0.83,
+    "dp": 0.0,
+    "total": 155.28
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 174,
+   "price": 107.12,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 18.64,
+    "exchange": 0.55,
+    "sebi": 0.02,
+    "stamp": 0.0,
+    "gst": 0.1,
+    "dp": 0.0,
+    "total": 19.31
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 150,
+   "price": 179.88,
+   "dp": true,
+   "fees": {
+    "brokerage": 67.46,
+    "other": 0.0,
+    "total": 67.46
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 100,
+   "price": 281.92,
+   "dp": false,
+   "fees": {
+    "brokerage": 70.48,
+    "other": 0.0,
+    "total": 70.48
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 254,
+   "price": 856.83,
+   "dp": false,
+   "fees": {
+    "brokerage": 544.09,
+    "other": 0.0,
+    "total": 544.09
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 75,
+   "price": 853.99,
+   "dp": true,
+   "fees": {
+    "brokerage": 160.13,
+    "other": 0.0,
+    "total": 160.13
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 364,
+   "price": 1249.08,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 454.67,
+    "exchange": 13.5,
+    "sebi": 0.45,
+    "stamp": 68.2,
+    "gst": 2.51,
+    "dp": 0.0,
+    "total": 539.33
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 365,
+   "price": 1351.68,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 493.36,
+    "exchange": 14.65,
+    "sebi": 0.49,
+    "stamp": 0.0,
+    "gst": 2.73,
+    "dp": 0.0,
+    "total": 511.23
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 169,
+   "price": 2795.13,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 472.38,
+    "exchange": 14.03,
+    "sebi": 0.47,
+    "stamp": 70.86,
+    "gst": 2.61,
+    "dp": 0.0,
+    "total": 560.35
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 341,
+   "price": 100.52,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 34.28,
+    "exchange": 1.02,
+    "sebi": 0.03,
+    "stamp": 0.0,
+    "gst": 0.19,
+    "dp": 0.0,
+    "total": 35.52
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 0.1073,
+   "price": 399.31,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.11,
+    "other": 0.0,
+    "total": 0.11
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 64,
+   "price": 860.05,
+   "dp": false,
+   "fees": {
+    "brokerage": 137.61,
+    "other": 0.0,
+    "total": 137.61
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 1.8008,
+   "price": 740.16,
+   "dp": true,
+   "fees": {
+    "brokerage": 3.34,
+    "other": 0.0,
+    "total": 3.34
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 14.7595,
+   "price": 175.34,
+   "dp": true,
+   "fees": {
+    "brokerage": 6.47,
+    "other": 0.0,
+    "total": 6.47
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 208,
+   "price": 731.02,
+   "dp": false,
+   "fees": {
+    "brokerage": 380.14,
+    "other": 0.0,
+    "total": 380.14
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 383,
+   "price": 774.76,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 296.73,
+    "exchange": 8.81,
+    "sebi": 0.3,
+    "stamp": 44.51,
+    "gst": 1.64,
+    "dp": 0.0,
+    "total": 351.99
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 5.2803,
+   "price": 246.54,
+   "dp": false,
+   "fees": {
+    "brokerage": 3.26,
+    "other": 0.0,
+    "total": 3.26
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 34,
+   "price": 649.97,
+   "dp": true,
+   "fees": {
+    "brokerage": 55.25,
+    "other": 0.0,
+    "total": 55.25
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "SELL",
+   "qty": 15.8065,
+   "price": 858.61,
+   "dp": false,
+   "fees": {
+    "brokerage": 33.93,
+    "other": 0.0,
+    "total": 33.93
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 411,
+   "price": 552.9,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 227.24,
+    "exchange": 6.75,
+    "sebi": 0.23,
+    "stamp": 0.0,
+    "gst": 1.26,
+    "dp": 0.0,
+    "total": 235.48
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 164,
+   "price": 986.76,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 161.83,
+    "exchange": 4.81,
+    "sebi": 0.16,
+    "stamp": 24.27,
+    "gst": 0.89,
+    "dp": 0.0,
+    "total": 191.96
+   }
+  },
+  {
+   "portfolio": "US",
+   "side": "BUY",
+   "qty": 201,
+   "price": 461.67,
+   "dp": false,
+   "fees": {
+    "brokerage": 231.99,
+    "other": 0.0,
+    "total": 231.99
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 279,
+   "price": 1447.66,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 403.9,
+    "exchange": 12.0,
+    "sebi": 0.4,
+    "stamp": 60.58,
+    "gst": 2.23,
+    "dp": 0.0,
+    "total": 479.11
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "SELL",
+   "qty": 37,
+   "price": 2651.01,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 98.09,
+    "exchange": 2.91,
+    "sebi": 0.1,
+    "stamp": 0.0,
+    "gst": 0.54,
+    "dp": 0.0,
+    "total": 101.64
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 256,
+   "price": 293.79,
+   "dp": false,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 75.21,
+    "exchange": 2.23,
+    "sebi": 0.08,
+    "stamp": 11.28,
+    "gst": 0.42,
+    "dp": 0.0,
+    "total": 89.22
+   }
+  },
+  {
+   "portfolio": "IN",
+   "side": "BUY",
+   "qty": 236,
+   "price": 403.13,
+   "dp": true,
+   "fees": {
+    "brokerage": 0.0,
+    "stt": 95.14,
+    "exchange": 2.83,
+    "sebi": 0.1,
+    "stamp": 14.27,
+    "gst": 0.53,
+    "dp": 0.0,
+    "total": 112.87
+   }
+  }
+ ]
+}

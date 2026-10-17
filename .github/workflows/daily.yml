@@ -39,6 +39,15 @@ jobs:
       - name: Run screener
         run: python screener.py
 
+      # Paper trading: fills pending orders from the day's complete bars and refreshes docs/fx.json.
+      # Does nothing until the two secrets exist, and never blocks the screener if it fails.
+      - name: Run paper-trading engine
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python paper/engine.py
+
       - name: Commit updated page
         run: |
           git config user.name "screener-bot"

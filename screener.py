@@ -568,7 +568,7 @@ TEMPLATE = r"""<!doctype html>
 </head>
 <body>
 <div class="wrap">
-  <h1>Breakout Screener</h1>
+  <h1>Breakout Screener <a href="paper.html" class="upd" style="text-decoration:none">Paper trading &rarr;</a></h1>
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="sub"><span id="sub"></span> <button type="button" class="upd" id="chk">Check for new data</button> <span id="chk-msg" aria-live="polite"></span></div>
   <div class="newdata" id="newdata" hidden>New data is available. <button type="button" id="loadnew">Load it</button></div>
@@ -950,6 +950,11 @@ function renderPanel() {
   const lk = document.createElement("div"); lk.className = "links"; lk.style.marginTop = "14px";
   for (const [txt, url] of [["TradingView", tvUrl(r)], ["Yahoo Finance", yahooUrl(r)]]) {
     const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = txt + " ↗"; lk.appendChild(a);
+  }
+  { // hand the stock (and the reference stop) to the paper-trading page
+    const pt = document.createElement("a");
+    pt.href = "paper.html?m=" + (CFG.bands ? "IN" : "US") + "&sym=" + encodeURIComponent(r.sym) + "&px=" + r.close + (ins.stop ? "&stop=" + ins.stop.px : "");
+    pt.textContent = "Paper trade this \u2192"; pt.style.fontWeight = "600"; lk.appendChild(pt);
   }
   box.appendChild(lk);
   const dc = document.createElement("div"); dc.className = "disc";

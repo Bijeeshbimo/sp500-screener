@@ -87,6 +87,32 @@ Mon–Fri, in UTC (GitHub's clock). Each run refreshes both markets and only pub
 
 ---
 
+## 🧾 Paper trading
+
+A practice account that lives beside the screener: add (pretend) funds, place orders, edit fills, and watch a dashboard of how the strategy is doing. Open it from the **Paper trading →** link at the top of the screener, or press **Paper trade this →** in any stock's panel (it arrives with the symbol and the reference stop filled in).
+
+- **India** (rupees) and **US** (dollars) are separate portfolios. Equities only, end-of-day fills, no margin, no shorting.
+- **Orders:** market, limit, stop, and brackets (stop-loss + target that cancel each other). A stop that gaps is filled at the open, not at your stop price. If a stop and a target could both trigger in one session, the stop is assumed first (changeable).
+- **Funds:** US top-ups are entered in rupees and show the exchange rate, GST, pay-in charge and the dollars credited (the layout of Dhan's own top-up screen). Every rate and charge can be overridden, and the page tracks the ₹10 lakh yearly TCS threshold.
+- **Charges** follow Dhan's published pricing (India delivery: zero brokerage + statutory charges + DP fee; US: 0.25% per trade, minimum $0.01). All rates are editable in **Settings**.
+- **Editing:** any executed order can be corrected; positions, P&L and the dashboard recalculate from the records.
+- **Dashboard:** equity curve against your deposits, deposit-adjusted return vs Nifty 50 / S&P 500, win rate, profit factor, expectancy, R-multiples, holding times, drawdown, results by tag, and plain-language observations.
+
+### One-time setup (about 10 minutes)
+
+1. **Supabase** (free): create a project, then **SQL Editor → New query**, paste all of `paper/schema.sql` and press **Run**.
+2. **Connect the page:** put the Project URL and the *publishable* (anon) key in `docs/paper-config.js`. These are meant to be public; your data is protected by your login and row-level security. Never put the `service_role` key in the repo.
+3. **Let the daily job fill orders:** in GitHub go to **Settings → Secrets and variables → Actions → New repository secret** and add `SUPABASE_URL` (the same URL) and `SUPABASE_SERVICE_KEY` (the `service_role` / secret key from Supabase → Project Settings → API). Without these the page still works, but orders are never filled.
+4. Open `paper.html`, press **Create account**, and sign in. If you want to skip the confirmation email, turn off **Confirm email** under Supabase → Authentication → Sign In / Providers → Email. Afterwards, consider turning off **Allow new users to sign up** so nobody else can register.
+
+Until step 2 is done the page runs in **demo mode**: everything is saved in that browser only.
+
+The order engine (`paper/engine.py`) runs in the same daily workflow right after the screener. It uses only completed daily bars, never fills an order twice, and its failure cannot stop the screener.
+
+**Tests:** `python3 paper/test_paper.py` (fees, fills, brackets, gaps) and `node paper/test_core.js` (funds maths, positions, P&L, insights).
+
+---
+
 ## 🔧 Tweaking
 
 Everything lives near the top of `screener.py`:
@@ -130,4 +156,11 @@ docs/market_us.json          last good US result (used if a refresh fails)
 docs/market_in.json          last good India result
 docs/version.json            tiny file the page checks for "new data"
 docs/earnings_cache.json     remembered earnings dates, so runs stay fast
+docs/paper.html              the paper-trading page (hand-written, not overwritten by the script)
+docs/paper-core.js           its calculations (funds, fees, positions, stats)
+docs/paper-config.js         your Supabase URL + publishable key
+docs/fx.json                 latest USD/INR, written by the daily job
+paper/schema.sql             database tables to paste into Supabase
+paper/engine.py, fees.py     the daily order engine and the Dhan charges
+paper/test_*.py, test_core.js  tests
 ```

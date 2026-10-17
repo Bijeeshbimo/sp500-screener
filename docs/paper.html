@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Trading</title>
+<style>
+  :root {
+    --bg:#fbfbf9; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e2dc; --card:#ffffff;
+    --up:#0f7b4d; --down:#c23a2b; --accent:#2b5fd9; --chip:#eeede7; --chipfg:#ffffff; --amber:#b3541e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141413; --fg:#ecebe6; --muted:#9a9990; --line:#2c2c29; --card:#1b1b19;
+            --up:#4cc38a; --down:#ff7566; --accent:#7ba0ff; --chip:#262624; --chipfg:#101010; --amber:#e0a06a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; padding:28px 16px 56px; }
+  h1 { font-size:22px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:22px 0 8px; font-weight:600; }
+  a { color:var(--accent); text-decoration:none; }
+  .head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:14px; }
+  .who { font-size:13px; color:var(--muted); }
+  .tabs { display:inline-flex; gap:4px; background:var(--chip); padding:3px; border-radius:999px; margin:6px 0 12px; flex-wrap:wrap; }
+  .tab { border:0; background:none; color:var(--fg); font:inherit; font-size:14px; padding:5px 16px; border-radius:999px; cursor:pointer; }
+  .tab[aria-selected="true"] { background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.18); font-weight:600; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+  .stat b { display:block; font-size:19px; font-variant-numeric:tabular-nums; }
+  .stat span { color:var(--muted); font-size:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+  .banner { border-radius:10px; padding:9px 14px; font-size:13.5px; margin:0 0 14px; background:#fff4e5; color:#7a4a05; border:1px solid #f0cf9c; }
+  @media (prefers-color-scheme: dark) { .banner { background:#3a2c14; color:#f1d6a6; border-color:#6a4f20; } }
+  .banner.err { background:#fde8e6; color:#8d2a1f; border-color:#f0b7b0; }
+  @media (prefers-color-scheme: dark) { .banner.err { background:#3d1c18; color:#ffb9b0; border-color:#7a3028; } }
+  .tw { overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  th, td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); font-size:14px; }
+  th:first-child, td:first-child, .l { text-align:left; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  tr:last-child td { border-bottom:0; }
+  tfoot td { font-weight:600; border-top:1px solid var(--line); }
+  .up { color:var(--up); font-weight:600; } .dn { color:var(--down); font-weight:600; } .mut { color:var(--muted); }
+  .nm { display:block; color:var(--muted); font-size:12px; }
+  button, .btn { font:inherit; font-size:13px; padding:5px 12px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--chipfg); border-color:var(--accent); font-weight:600; }
+  button.sm { padding:2px 9px; font-size:12px; margin-left:4px; }
+  button.danger { color:var(--down); }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 12px; }
+  .chip { background:var(--chip); border:0; border-radius:999px; padding:4px 12px; font-size:13px; }
+  .chip.on { background:var(--accent); color:var(--chipfg); }
+  label { display:block; font-size:12px; color:var(--muted); }
+  input, select, textarea { width:100%; margin-top:4px; padding:7px 9px; font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:7px; }
+  input[type=checkbox] { width:auto; margin:0 6px 0 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .kv div { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  .kv b { display:block; font-size:16px; font-variant-numeric:tabular-nums; } .kv span { font-size:12px; color:var(--muted); }
+  ul.ins { list-style:none; margin:0; padding:0; font-size:14px; }
+  ul.ins li { position:relative; padding:4px 0 4px 18px; }
+  ul.ins li::before { content:"\25CF"; position:absolute; left:0; top:6px; font-size:10px; color:var(--muted); }
+  ul.ins li.good::before { color:var(--up); } ul.ins li.warn::before { color:#d99a00; } ul.ins li.bad::before { color:var(--down); }
+  .hint { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  .empty { text-align:center; color:var(--muted); padding:30px 12px; }
+  .foot { color:var(--muted); font-size:12px; margin-top:22px; }
+  svg.ch { width:100%; height:auto; display:block; touch-action:none; }
+  .ch text { font:10px system-ui,sans-serif; fill:var(--muted); }
+  .ch .gl { stroke:var(--line); stroke-width:1; }
+  .lgd { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin:2px 0 6px; }
+  .lgd i { display:inline-block; width:14px; border-top:2px solid; vertical-align:middle; margin-right:5px; }
+  .ro { font-size:12.5px; color:var(--fg); min-height:18px; font-variant-numeric:tabular-nums; }
+  dialog { border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--fg); padding:0; width:min(560px,96vw); max-height:92vh; overflow:auto; }
+  dialog::backdrop { background:rgba(0,0,0,.45); }
+  .dform { padding:18px 18px 16px; }
+  .dform h3 { margin:0 0 12px; font-size:17px; }
+  .dform .grid { margin-bottom:10px; }
+  .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .brk { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0 0 10px; font-size:13.5px; }
+  .brk div { display:flex; justify-content:space-between; gap:12px; padding:2px 0; }
+  .brk .tot { border-top:1px solid var(--line); margin-top:4px; padding-top:6px; font-weight:600; }
+  .err { color:var(--down); font-size:13px; min-height:18px; margin-top:8px; }
+  #toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 16px; border-radius:999px; font-size:13px; z-index:100; }
+  #toast[hidden] { display:none; }
+  .auth { max-width:380px; margin:30px auto; }
+  .auth .card > * + * { margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div><h1>Paper Trading</h1><div class="sub"><a href="./">&larr; Screener</a> &middot; <span id="sub"></span></div></div>
+    <div class="who" id="who"></div>
+  </div>
+  <div id="banner"></div>
+
+  <div id="auth" class="auth" hidden>
+    <div class="card">
+      <b>Sign in to your paper-trading account</b>
+      <label>Email<input id="a-email" type="email" autocomplete="username"></label>
+      <label>Password<input id="a-pass" type="password" autocomplete="current-password"></label>
+      <div class="bar"><button class="primary" id="a-in" type="button">Sign in</button><button id="a-up" type="button">Create account</button><button id="a-reset" type="button">Forgot password</button></div>
+      <div class="err" id="a-msg" role="alert"></div>
+    </div>
+  </div>
+
+  <div id="app" hidden>
+    <div class="tabs" id="mk" role="tablist"></div>
+    <div class="stats" id="stats"></div>
+    <div class="tabs" id="views" role="tablist"></div>
+    <div id="view"></div>
+  </div>
+
+  <p class="foot">Simulation only. Orders are filled from end-of-day prices (Yahoo Finance via yfinance, unofficial) by a daily job after each market closes, using the rules in the Orders tab. A real broker&rsquo;s fills, slippage, circuit limits and charges will differ. Charges follow Dhan&rsquo;s published delivery pricing and are editable in Settings. For practice and record keeping, not investment advice.</p>
+</div>
+<dialog id="dlg"></dialog>
+<div id="toast" hidden></div>
+<script src="paper-config.js"></script>
+<script src="paper-core.js"></script>
+<script>
+"use strict";
+const PC = PaperCore, CFG = window.PAPER_CONFIG || {};
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+const MKT = { IN: { cur: "₹", loc: "en-IN", name: "India", bench: "^NSEI", benchName: "Nifty 50", file: "market_in.json" },
+              US: { cur: "$", loc: "en-US", name: "US", bench: "^GSPC", benchName: "S&P 500", file: "market_us.json" } };
+const VIEWS = [["dash", "Dashboard"], ["pos", "Positions"], ["ord", "Orders"], ["trd", "Trades"], ["fund", "Funds"], ["set", "Settings"]];
+let M = ls.get("paper-m") === "US" ? "US" : "IN", VIEW = ls.get("paper-v") || "dash", OFILTER = "open";
+let STORE = null, S = { ledger: [], orders: [], fills: [], prices: [], settings: PC.mergeSettings({}) }, PM = {}, ACC = null, SESS = {}, FX = null, SYMS = {};
+
+const today = () => new Date().toLocaleDateString("en-CA");
+const money = (x, mk, d) => x == null || isNaN(x) ? "–" : (x < 0 ? "-" : "") + MKT[mk || M].cur + Math.abs(x).toLocaleString(MKT[mk || M].loc, { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d });
+const num = (x, d) => x == null || isNaN(x) ? "–" : (+x).toLocaleString("en-US", { maximumFractionDigits: d == null ? 4 : d });
+const pct = x => x == null || isNaN(x) ? "–" : (x > 0 ? "+" : "") + x.toFixed(2) + "%";
+const sgn = x => x > 0.005 ? "up" : x < -0.005 ? "dn" : "";
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + Math.random().toString(16).slice(2));
+const toYf = (sym, m) => m === "IN" ? sym.replace(/\.NS$/i, "") + ".NS" : sym.replace(/\./g, "-");
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3200); }
+const banner = (msg, err) => { $("banner").innerHTML = msg ? `<div class="banner${err ? " err" : ""}">${msg}</div>` : ""; };
+
+/* ----------------------------------------------------------------- storage -- */
+function localStore() {
+  const KEY = "paper-demo-v1";
+  const load = () => { try { return JSON.parse(ls.get(KEY)) || {}; } catch (e) { return {}; } };
+  const save = d => ls.set(KEY, JSON.stringify(d));
+  return {
+    mode: "demo",
+    async list(t) { return (load()[t] || []).slice(); },
+    async insert(t, row) { const d = load(); const r = { id: uuid(), created_at: new Date().toISOString(), ...row }; (d[t] = d[t] || []).push(r); save(d); return r; },
+    async update(t, id, patch) { const d = load(); const r = (d[t] || []).find(x => x.id === id); if (r) Object.assign(r, patch); save(d); return r; },
+    async remove(t, id) { const d = load(); d[t] = (d[t] || []).filter(x => x.id !== id); save(d); },
+    async getSettings() { return load().settings || {}; },
+    async saveSettings(v) { const d = load(); d.settings = v; save(d); },
+  };
+}
+function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => no(new Error("Could not load " + src)); document.head.appendChild(s); }); }
+async function cloudStore() {
+  await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+  const T = t => "paper_" + t, ck = r => { if (r.error) throw new Error(r.error.message); return r.data; };
+  return {
+    mode: "cloud", sb,
+    async list(t) { const out = []; for (let i = 0; ; i += 1000) { const d = ck(await sb.from(T(t)).select("*").range(i, i + 999)); out.push(...d); if (d.length < 1000) return out; } },
+    async insert(t, row) { return ck(await sb.from(T(t)).insert(row).select().single()); },
+    async update(t, id, patch) { return ck(await sb.from(T(t)).update(patch).eq("id", id).select().single()); },
+    async remove(t, id) { ck(await sb.from(T(t)).delete().eq("id", id)); },
+    async getSettings() { const d = ck(await sb.from("paper_settings").select("data").maybeSingle()); return d ? d.data : {}; },
+    async saveSettings(v) { const u = (await sb.auth.getUser()).data.user; ck(await sb.from("paper_settings").upsert({ user_id: u.id, data: v, updated_at: new Date().toISOString() })); },
+  };
+}
+
+/* -------------------------------------------------------------------- boot -- */
+async function boot() {
+  try {
+    if (!CFG.supabaseUrl || !CFG.supabaseAnonKey) {
+      STORE = localStore();
+      banner("Demo mode: your data is saved only in this browser and will not sync to other devices. To sync, connect Supabase (see the README, section &ldquo;Paper trading&rdquo;).");
+      return start();
+    }
+    STORE = await cloudStore();
+    const { data } = await STORE.sb.auth.getSession();
+    STORE.sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") showAuth(); });
+    if (data.session) start(); else showAuth();
+  } catch (e) { banner("Could not start: " + esc(e.message), true); }
+}
+function showAuth() {
+  $("app").hidden = true; $("auth").hidden = false; $("who").textContent = "";
+  const msg = (t, ok) => { $("a-msg").style.color = ok ? "var(--up)" : ""; $("a-msg").textContent = t; };
+  const cred = () => ({ email: $("a-email").value.trim(), password: $("a-pass").value });
+  $("a-in").onclick = async () => { const r = await STORE.sb.auth.signInWithPassword(cred()); if (r.error) msg(r.error.message); else { $("auth").hidden = true; start(); } };
+  $("a-up").onclick = async () => {
+    const r = await STORE.sb.auth.signUp(cred());
+    if (r.error) return msg(r.error.message);
+    if (r.data.session) { $("auth").hidden = true; start(); } else msg("Account created. Check your email to confirm it, then sign in.", true);
+  };
+  $("a-reset").onclick = async () => {
+    const e = $("a-email").value.trim(); if (!e) return msg("Type your email first.");
+    const r = await STORE.sb.auth.resetPasswordForEmail(e, { redirectTo: location.href.split("?")[0] });
+    msg(r.error ? r.error.message : "Password reset email sent.", !r.error);
+  };
+}
+async function start() {
+  $("auth").hidden = true; $("app").hidden = false;
+  if (STORE.mode === "cloud") {
+    const u = (await STORE.sb.auth.getUser()).data.user;
+    $("who").innerHTML = esc(u ? u.email : "") + ' &middot; <a href="#" id="signout">Sign out</a>';
+    $("signout").onclick = async e => { e.preventDefault(); await STORE.sb.auth.signOut(); };
+  }
+  await Promise.all([reload(), fetch("version.json", { cache: "no-store" }).then(r => r.json()).then(v => SESS = v.sessions || {}).catch(() => {}),
+                     fetch("fx.json", { cache: "no-store" }).then(r => r.json()).then(v => FX = v).catch(() => {})]);
+  buildTabs(); render(); handleParams();
+}
+async function reload() {
+  try {
+    const [ledger, orders, fills, prices, saved] = await Promise.all(["ledger", "orders", "fills", "prices"].map(t => STORE.list(t)).concat([STORE.getSettings()]));
+    S = { ledger, orders, fills, prices, settings: PC.mergeSettings(saved) };
+    PM = {};
+    for (const p of prices) (PM[p.yf] = PM[p.yf] || []).push({ date: p.date, close: +p.close });
+    for (const k in PM) PM[k].sort((a, b) => (a.date < b.date ? -1 : 1));
+  } catch (e) { banner("Could not load your data: " + esc(e.message), true); }
+}
+function buildTabs() {
+  $("mk").innerHTML = Object.keys(MKT).map(k => `<button class="tab" role="tab" data-act="mkt" data-v="${k}">${MKT[k].name}</button>`).join("");
+  $("views").innerHTML = VIEWS.map(v => `<button class="tab" role="tab" data-act="view" data-v="${v[0]}">${v[1]}</button>`).join("");
+}
+const lastSession = () => SESS[M] || today();
+const stopOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "STOP" && (o.status === "pending" || o.status === "waiting"));
+
+/* ------------------------------------------------------------------ render -- */
+function compute() {
+  const lg = S.ledger.filter(r => r.portfolio === M), fl = S.fills.filter(r => r.portfolio === M);
+  ACC = PC.buildAccount(lg, fl, PM, MKT[M].bench);
+}
+function render() {
+  compute();
+  document.querySelectorAll("#mk .tab").forEach(b => b.setAttribute("aria-selected", b.dataset.v === M));
+  document.querySelectorAll("#views .tab").forEach(b => b.setAttribute("aria-selected", b.dataset.v === VIEW));
+  const a = ACC, last = Object.values(PM).flat().map(p => p.date).sort().pop();
+  $("sub").textContent = `${MKT[M].name} portfolio in ${M === "IN" ? "rupees" : "US dollars"} · ${S.orders.filter(o => o.portfolio === M && o.status === "pending").length} pending order(s) · prices as of ${last || "(none yet)"}`;
+  const hasMoney = S.ledger.some(r => r.portfolio === M);
+  $("stats").innerHTML = hasMoney ? [
+    ["Equity", money(a.equity), ""], ["Cash", money(a.cash), a.cash < -0.005 ? "dn" : ""], ["Invested", money(a.invested), ""],
+    ["Net deposits", money(a.netDeposits), ""],
+    ["Total P&L", money(a.pnl) + (a.netDeposits > 0 ? ` (${pct(a.pnl / a.netDeposits * 100)})` : ""), sgn(a.pnl)],
+    ["Realized", money(a.realized), sgn(a.realized)], ["Charges paid", money(a.fees), ""],
+  ].map(s => `<div class="stat"><b class="${s[2]}">${s[1]}</b><span>${s[0]}</span></div>`).join("") : "";
+  const v = { dash: viewDash, pos: viewPos, ord: viewOrd, trd: viewTrd, fund: viewFund, set: viewSet }[VIEW]();
+  $("view").innerHTML = (a.cash < -0.005 ? `<div class="banner err">Cash is negative. A deposit is missing or a trade was entered or edited with the wrong amount. Check the Funds and Trades tabs.</div>` : "") + v;
+  if (VIEW === "dash") drawCharts();
+}
+const empty = msg => `<div class="card empty">${msg}</div>`;
+
+/* --------------------------------------------------------------- dashboard -- */
+let CH = {};
+function lineChart(id, series, fmt) {
+  const W = 720, H = 230, pl = 62, pr = 12, pt = 10, pb = 22;
+  const pts = series.flatMap(s => s.pts);
+  if (pts.length < 2) return '<p class="hint">The chart appears once there are two or more days of data.</p>';
+  const xs = pts.map(p => Date.parse(p.x)), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = Math.min(...pts.map(p => p.y)), y1 = Math.max(...pts.map(p => p.y)); if (y0 === y1) { y0 -= 1; y1 += 1; }
+  const padY = (y1 - y0) * 0.08; y0 -= padY; y1 += padY;
+  const X = d => pl + (Date.parse(d) - x0) / ((x1 - x0) || 1) * (W - pl - pr), Y = v => pt + (1 - (v - y0) / (y1 - y0)) * (H - pt - pb);
+  let g = "";
+  for (let i = 0; i <= 4; i++) { const v = y0 + (y1 - y0) * i / 4, y = Y(v); g += `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}"/><text x="${pl - 6}" y="${y + 3}" text-anchor="end">${esc(fmt(v))}</text>`; }
+  const d0 = new Date(x0).toISOString().slice(0, 10), d1 = new Date(x1).toISOString().slice(0, 10);
+  g += `<text x="${pl}" y="${H - 6}">${d0}</text><text x="${W - pr}" y="${H - 6}" text-anchor="end">${d1}</text>`;
+  const paths = series.map(s => `<path d="${s.pts.map((p, i) => (i ? "L" : "M") + X(p.x).toFixed(1) + " " + Y(p.y).toFixed(1)).join("")}" fill="none" stroke="${s.color}" stroke-width="${s.w || 2}" ${s.dash ? 'stroke-dasharray="5 4"' : ""} stroke-linejoin="round"/>`).join("");
+  CH[id] = { series, fmt, X, W, pl, pr, H, pt, pb };
+  const lg = series.map(s => `<span><i style="border-color:${s.color}${s.dash ? ";border-top-style:dashed" : ""}"></i>${esc(s.name)}</span>`).join("");
+  return `<div class="lgd">${lg}</div><svg class="ch" id="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(" and "))} over time">${g}${paths}<line id="${id}-v" class="gl" y1="${pt}" y2="${H - pb}" x1="0" x2="0" style="display:none"/></svg><div class="ro" id="${id}-ro">&nbsp;</div>`;
+}
+function drawCharts() {
+  for (const id in CH) {
+    const svg = $(id); if (!svg) continue;
+    svg.addEventListener("pointermove", ev => {
+      const c = CH[id], r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * c.W;
+      let best = null, bd = 1e18;
+      for (const p of c.series[0].pts) { const dx = Math.abs(c.X(p.x) - px); if (dx < bd) { bd = dx; best = p; } }
+      if (!best) return;
+      const v = $(id + "-v"); v.setAttribute("x1", c.X(best.x)); v.setAttribute("x2", c.X(best.x)); v.style.display = "";
+      const vals = c.series.map(s => { const q = s.pts.filter(p => p.x <= best.x).pop(); return `${s.name}: ${q ? c.fmt(q.y) : "–"}`; });
+      $(id + "-ro").textContent = best.x + "   " + vals.join("   ");
+    });
+  }
+}
+function viewDash() {
+  if (!S.ledger.some(r => r.portfolio === M)) return empty(`No money in the ${MKT[M].name} portfolio yet. <br><br><button class="primary" data-act="addfunds">Add funds</button>`);
+  const a = ACC, s = a.stats, cur = MKT[M].cur;
+  CH = {};
+  const c = a.curve;
+  const eq = lineChart("c-eq", [{ name: "Equity", color: "var(--accent)", pts: c.map(p => ({ x: p.date, y: p.equity })) },
+                                { name: "Net deposits", color: "var(--muted)", dash: 1, w: 1.5, pts: c.map(p => ({ x: p.date, y: p.netDep })) }], v => money(v, M, 0));
+  const b = PM[MKT[M].bench] || [];
+  let benchPts = [];
+  if (c.length && b.length) { const b0 = ([...b].reverse().find(p => p.date <= c[0].date) || b[0]).close; benchPts = b.filter(p => p.date >= c[0].date).map(p => ({ x: p.date, y: (p.close / b0 - 1) * 100 })); }
+  const rt = lineChart("c-rt", [{ name: "You (deposit-adjusted)", color: "var(--accent)", pts: c.map(p => ({ x: p.date, y: p.twr })) }]
+    .concat(benchPts.length ? [{ name: MKT[M].benchName, color: "var(--muted)", dash: 1, w: 1.5, pts: benchPts }] : []), v => v.toFixed(1) + "%");
+  const k = (l, v, cls) => `<div><b class="${cls || ""}">${v}</b><span>${l}</span></div>`;
+  const ins = PC.insights(a, { currency: cur, benchName: MKT[M].benchName, stopSymbols: new Set(S.orders.filter(o => o.portfolio === M && o.side === "SELL" && o.type === "STOP" && (o.status === "pending")).map(o => o.symbol)) });
+  const tags = PC.byTag(a.trades);
+  return `<h2>Equity</h2><div class="card">${eq}</div>
+  <h2>Return vs ${esc(MKT[M].benchName)}</h2><div class="card">${rt}<p class="hint" style="margin:6px 0 0">Deposits and withdrawals are removed from the return, so adding money never looks like profit.</p></div>
+  <h2>Performance</h2><div class="card"><div class="kv">
+    ${k("Closed trades", s.n)}${k("Win rate", s.winRate == null ? "–" : s.winRate.toFixed(0) + "%")}
+    ${k("Average win", money(s.avgWin), "up")}${k("Average loss", s.avgLoss == null ? "–" : money(-s.avgLoss), "dn")}
+    ${k("Win/loss size", s.payoff == null ? "–" : s.payoff.toFixed(2) + "x")}${k("Profit factor", s.profitFactor == null ? "–" : s.profitFactor === Infinity ? "∞" : s.profitFactor.toFixed(2))}
+    ${k("Expectancy / trade", money(s.expectancy), sgn(s.expectancy))}${k("Average R", s.avgR == null ? "–" : s.avgR.toFixed(2) + "R")}
+    ${k("Avg days: winners", s.holdWin == null ? "–" : s.holdWin.toFixed(1))}${k("Avg days: losers", s.holdLoss == null ? "–" : s.holdLoss.toFixed(1))}
+    ${k("Best trade", money(s.best), "up")}${k("Worst trade", money(s.worst), "dn")}
+    ${k("Deposit-adjusted return", pct(a.twrPct), sgn(a.twrPct))}${k("Max drawdown", a.maxDrawdownPct == null ? "–" : "-" + a.maxDrawdownPct.toFixed(1) + "%")}
+    ${k(MKT[M].benchName + " (same period)", pct(a.benchPct), sgn(a.benchPct))}${k("Unrealized P&L", money(a.unrealized), sgn(a.unrealized))}
+  </div></div>
+  <h2>Observations</h2><div class="card">${ins.length ? `<ul class="ins">${ins.map(i => `<li class="${i.level}">${esc(i.text)}</li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Nothing to report yet.</p>'}
+    <p class="hint" style="margin:10px 0 0">Rule-based checks on your own numbers, not predictions.</p></div>
+  ${tags.length && a.trades.length ? `<h2>By tag</h2><div class="tw"><table><thead><tr><th>Tag</th><th>Trades</th><th>Win rate</th><th>Avg / trade</th><th>Total P&amp;L</th><th>Avg days</th></tr></thead><tbody>${tags.map(t => `<tr><td>${esc(t.tag)}</td><td>${t.n}</td><td>${t.winRate.toFixed(0)}%</td><td class="${sgn(t.expectancy)}">${money(t.expectancy)}</td><td class="${sgn(t.total)}">${money(t.total)}</td><td>${((t.holdWin || 0) * t.wins + (t.holdLoss || 0) * t.losses) / ((t.wins + t.losses) || 1) | 0}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+}
+
+/* --------------------------------------------------------------- positions -- */
+function viewPos() {
+  const a = ACC, P = a.positions;
+  if (!P.length) return empty("No open positions.<br><br>" + `<button class="primary" data-act="neworder">New order</button>`);
+  const rows = P.map(p => {
+    const so = stopOrderFor(p.symbol), stop = so ? +so.price : p.stop, dist = stop != null && p.price ? (p.price - stop) / p.price * 100 : null;
+    return `<tr><td>${esc(p.symbol)}${p.tag ? `<span class="nm">${esc(p.tag)}</span>` : ""}</td><td>${num(p.qty)}</td><td>${money(p.avg)}</td><td>${money(p.price)}<span class="nm">${p.priceDate || "no price yet"}</span></td>
+      <td>${money(p.value)}</td><td class="${sgn(p.pnl)}">${money(p.pnl)}</td><td class="${sgn(p.pct)}">${pct(p.pct)}</td>
+      <td>${stop != null ? money(stop) + `<span class="nm">${so ? "stop order" : "planned"}${dist != null ? ` · ${dist.toFixed(1)}% below` : ""}</span>` : '<span class="mut">none</span>'}</td><td>${p.days}</td>
+      <td><button class="sm" data-act="sell" data-sym="${esc(p.symbol)}">Sell</button><button class="sm" data-act="setstop" data-sym="${esc(p.symbol)}">${so ? "Move stop" : "Set stop"}</button></td></tr>`;
+  }).join("");
+  return `<div class="bar"><button class="primary" data-act="neworder">New order</button></div>
+  <div class="tw"><table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last close</th><th>Value</th><th>P&amp;L</th><th>%</th><th>Stop</th><th>Days</th><th></th></tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr><td>Total</td><td></td><td></td><td></td><td>${money(a.invested)}</td><td class="${sgn(a.unrealized)}">${money(a.unrealized)}</td><td></td><td></td><td></td><td></td></tr></tfoot></table></div>
+  <p class="hint">Average cost includes buying charges. Last close comes from the daily job; it updates after each market closes.</p>`;
+}
+
+/* ------------------------------------------------------------------ orders -- */
+function viewOrd() {
+  const F = { open: o => o.status === "pending" || o.status === "waiting", filled: o => o.status === "filled", closed: o => ["cancelled", "expired", "rejected"].includes(o.status), all: () => true };
+  const list = S.orders.filter(o => o.portfolio === M && F[OFILTER](o)).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  const chips = [["open", "Open"], ["filled", "Filled"], ["closed", "Cancelled / expired / rejected"], ["all", "All"]].map(c => `<button class="chip${OFILTER === c[0] ? " on" : ""}" data-act="ofilter" data-v="${c[0]}">${c[1]}</button>`).join("");
+  const rows = list.map(o => {
+    const live = o.status === "pending" || o.status === "waiting";
+    const px = o.type === "MARKET" ? "at open" : (o.type === "STOP" ? "stop " : "limit ") + money(o.price);
+    return `<tr><td class="l">${o.created_at ? o.created_at.slice(0, 10) : ""}</td><td>${esc(o.symbol)}${o.parent_id ? '<span class="nm">bracket leg</span>' : ""}</td><td class="${o.side === "BUY" ? "up" : "dn"}">${o.side}</td><td>${num(o.qty)}</td><td>${px}</td>
+      <td>after ${esc(o.after_date)}${o.expiry ? `<span class="nm">expires ${esc(o.expiry)}</span>` : ""}</td><td>${esc(o.status)}${o.status_note ? `<span class="nm">${esc(o.status_note)}</span>` : ""}</td>
+      <td>${live ? `<button class="sm" data-act="editorder" data-id="${o.id}">Edit</button><button class="sm danger" data-act="cancelorder" data-id="${o.id}">Cancel</button>` : `<button class="sm danger" data-act="delorder" data-id="${o.id}">Delete</button>`}</td></tr>`;
+  }).join("");
+  return `<div class="bar"><button class="primary" data-act="neworder">New order</button>${chips}</div>
+  ${list.length ? `<div class="tw"><table><thead><tr><th class="l">Placed</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Live</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : empty("No orders here.")}
+  <div class="card"><b>How orders are filled</b><ul class="ins" style="margin-top:6px">
+    <li>A daily job fills orders after each market closes (India: evening IST, US: early morning IST). The page shows results once it has run.</li>
+    <li><b>Market</b> fills at the next session&rsquo;s open. <b>Limit</b> buy fills at the open if it is at or below your price, otherwise at your price if the day&rsquo;s low reaches it (sell: mirror).</li>
+    <li><b>Stop</b> sell triggers when the low reaches your price. If the stock gaps below it, you are filled at the open, not at your stop. A stop buy mirrors this on the high.</li>
+    <li>Bracket legs (stop-loss and target) go live the session after the entry fills and cancel each other. If both could trigger in one session, the stop is assumed to hit first (change in Settings).</li>
+    <li>No margin and no short selling: a buy without enough cash, or a sell of shares you do not hold, is rejected. A day order uses &ldquo;expiry&rdquo;; otherwise it stays open until you cancel.</li></ul></div>`;
+}
+
+/* ------------------------------------------------------------------ trades -- */
+function viewTrd() {
+  const fl = S.fills.filter(r => r.portfolio === M).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (a.created_at || "") < (b.created_at || "") ? 1 : -1));
+  const frows = fl.map(f => `<tr><td class="l">${esc(f.date)}</td><td>${esc(f.symbol)}${f.tag ? `<span class="nm">${esc(f.tag)}</span>` : ""}</td><td class="${f.side === "BUY" ? "up" : "dn"}">${f.side}</td><td>${num(f.qty)}</td><td>${money(f.price)}</td>
+    <td>${money(+f.qty * +f.price)}</td><td>${money(f.fees_total)}</td><td>${esc(f.source)}</td>
+    <td><button class="sm" data-act="editfill" data-id="${f.id}">Edit</button><button class="sm danger" data-act="delfill" data-id="${f.id}">Delete</button></td></tr>`).join("");
+  const tr = ACC.trades.slice().sort((a, b) => (a.exitDate < b.exitDate ? 1 : -1));
+  const trows = tr.map(t => `<tr><td class="l">${esc(t.exitDate)}</td><td>${esc(t.symbol)}${t.tag ? `<span class="nm">${esc(t.tag)}</span>` : ""}</td><td>${num(t.qty)}</td><td>${money(t.entry)}</td><td>${money(t.exit)}</td>
+    <td class="${sgn(t.pnl)}">${money(t.pnl)}</td><td class="${sgn(t.pct)}">${pct(t.pct)}</td><td>${t.days.toFixed(0)}</td><td>${t.r == null ? "–" : t.r.toFixed(2) + "R"}</td></tr>`).join("");
+  return `<h2>Executed orders (fills)</h2><div class="bar"><button class="primary" data-act="addfill">Add a trade by hand</button><span class="hint" style="margin:0">Fix a misread price or quantity with Edit. Everything recalculates from the fills.</span></div>
+  ${fl.length ? `<div class="tw"><table><thead><tr><th class="l">Date</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Value</th><th>Charges</th><th>Source</th><th></th></tr></thead><tbody>${frows}</tbody></table></div>` : empty("No executed orders yet.")}
+  <h2>Closed trades (first in, first out)</h2>
+  ${tr.length ? `<div class="tw"><table><thead><tr><th class="l">Closed</th><th>Symbol</th><th>Qty</th><th>Avg entry</th><th>Exit</th><th>Net P&amp;L</th><th>%</th><th>Days</th><th>R</th></tr></thead><tbody>${trows}</tbody></table></div><p class="hint">Entry includes buying charges and exit is after selling charges, so P&amp;L is what you would actually keep (before tax). R needs a planned stop on the buy.</p>` : empty("No closed trades yet.")}`;
+}
+
+/* ------------------------------------------------------------------- funds -- */
+function viewFund() {
+  const lg = S.ledger.filter(r => r.portfolio === M).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const rows = lg.map(r => {
+    const m = r.meta || {};
+    const det = M === "US" && r.kind === "deposit" ? `${money(r.inr, "IN", 2)} sent at ₹${num(m.rate, 4)}${m.gst != null ? ` · GST ₹${num(m.gst, 2)}` : ""}${m.payin_fee_usd ? ` · pay-in $${num(m.payin_fee_usd, 2)}` : ""}${m.tcs ? ` · TCS ₹${num(m.tcs, 2)}` : ""}` : esc(r.note || "");
+    return `<tr><td class="l">${esc(r.date)}</td><td>${r.kind === "deposit" ? "Deposit" : "Withdrawal"}</td><td class="${r.kind === "deposit" ? "up" : "dn"}">${money(r.amount)}</td><td class="l mut">${det}${m.tcs || r.note ? "" : ""}</td>
+      <td><button class="sm" data-act="editfund" data-id="${r.id}">Edit</button><button class="sm danger" data-act="delfund" data-id="${r.id}">Delete</button></td></tr>`;
+  }).join("");
+  let lrs = "";
+  if (M === "US") {
+    const fy = PC.fyOf(today()), used = S.ledger.filter(r => r.portfolio === "US" && r.kind === "deposit" && PC.fyOf(r.date) === fy).reduce((x, r) => x + (+r.inr || 0), 0);
+    lrs = `<div class="card"><b>Remitted abroad this financial year (Apr ${fy} – Mar ${fy + 1}):</b> ${money(used, "IN", 0)} of ₹10,00,000 before 20% TCS applies <span class="mut">(your bank collects TCS; it is adjustable in your income tax return)</span></div>`;
+  }
+  return `<div class="bar"><button class="primary" data-act="addfunds">Add funds</button><button data-act="withdraw">Withdraw</button><span class="hint" style="margin:0">Balance: <b>${money(ACC.cash)}</b></span></div>${lrs}
+  ${lg.length ? `<div class="tw"><table><thead><tr><th class="l">Date</th><th>Type</th><th>Amount (${M === "IN" ? "INR" : "USD"})</th><th class="l">Details</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : empty("No deposits yet.")}`;
+}
+
+/* ---------------------------------------------------------------- settings -- */
+const SLAB = {
+  in: { brokerage_pct: "Brokerage (% of value)", stt_pct: "STT (% of value, buy and sell)", stamp_buy_pct: "Stamp duty (% of value, buy)", exch_pct: "Exchange charges (% of value)", sebi_pct: "SEBI fee (% of value)", gst_pct: "GST (% on brokerage, exchange and SEBI)", dp_charge: "DP charge per stock per sell day (₹, before GST)", slippage_bps: "Slippage on market/stop fills (basis points)" },
+  us: { brokerage_pct: "Brokerage (% of value)", min_brokerage: "Minimum brokerage per order ($)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
+  fx: { markup_pct: "FX markup over the reference rate (%)", gst_pct_of_inr: "GST on conversion (% of the INR sent)", bank_charge_inr: "Bank / wire charge per top-up (₹)", payin_fee_usd: "Pay-in fee when under the free limit ($)", payin_free_from_usd: "Pay-in free from ($)", tcs_rate_pct: "TCS rate (%)", tcs_threshold_inr: "TCS threshold per financial year (₹)", fallback_rate: "Fallback USD/INR rate (if the daily rate is unavailable)" },
+};
+const GTITLE = { in: "India trades (Dhan equity delivery)", us: "US trades (Dhan US Stocks)", fx: "Adding US funds (INR to USD)" };
+function viewSet() {
+  const st = S.settings;
+  const grp = g => `<h2>${GTITLE[g]}</h2><div class="card"><div class="grid">${Object.keys(SLAB[g]).map(k => `<label>${SLAB[g][k]}<input data-s="${g}.${k}" type="number" step="any" value="${st[g][k]}"></label>`).join("")}</div>
+    ${g === "fx" ? `<p style="margin:10px 0 0"><label class="chk"><input type="checkbox" data-s="fx.tcs_enabled" ${st.fx.tcs_enabled ? "checked" : ""}>Add TCS to new US top-ups when over the threshold</label></p>` : ""}</div>`;
+  return `<p class="hint">Starting values follow Dhan&rsquo;s published pricing. Past trades and top-ups keep the charges they were saved with; changing a rate only affects new ones (or a fill you edit).</p>
+  ${grp("in")}${grp("us")}${grp("fx")}
+  <h2>Order engine</h2><div class="card"><label>If a stop and a target could both trigger in the same session, assume the<select data-s="engine.same_bar_priority"><option value="stop"${st.engine.same_bar_priority === "stop" ? " selected" : ""}>stop hit first (conservative)</option><option value="target"${st.engine.same_bar_priority === "target" ? " selected" : ""}>target hit first</option></select></label></div>
+  <div class="bar"><button class="primary" data-act="savesettings">Save settings</button><button data-act="resetsettings">Reset to defaults</button><button data-act="export">Download a backup (JSON)</button></div>`;
+}
+
+/* ----------------------------------------------------------------- dialogs -- */
+function dlg(html) { const d = $("dlg"); d.innerHTML = `<form class="dform" id="dform" novalidate>${html}</form>`; if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute("open", ""); return $("dform"); }
+function closeDlg() { const d = $("dlg"); if (d.close) d.close(); else d.removeAttribute("open"); }
+const val = (f, n) => f.elements[n].value.trim();
+const nval = (f, n) => { const v = val(f, n); return v === "" ? null : +v; };
+const err = (f, m) => { f.querySelector(".err").textContent = m; };
+const acts = (label) => `<div class="err" role="alert"></div><div class="actions"><button type="button" data-act="closedlg">Cancel</button><button class="primary" type="submit">${label}</button></div>`;
+async function guard(f, fn) { try { await fn(); await reload(); render(); } catch (e) { err(f, e.message || String(e)); } }
+
+/* funds */
+function addFundsDialog(existing) {
+  if (M === "IN") {
+    const f = dlg(`<h3>${existing ? "Edit deposit" : "Add funds"} (₹)</h3><div class="grid"><label>Amount (₹)<input name="amt" type="number" step="any" inputmode="decimal" value="${existing ? existing.amount : ""}"></label>
+      <label>Date<input name="date" type="date" value="${existing ? existing.date : today()}"></label></div>
+      ${existing ? "" : '<div class="bar">' + [10000, 25000, 50000, 100000].map(v => `<button type="button" class="chip" data-act="quick" data-v="${v}">+ ₹${v.toLocaleString("en-IN")}</button>`).join("") + "</div>"}
+      <label>Note<input name="note" value="${esc(existing ? existing.note : "")}"></label>${acts("Save")}`);
+    f.onsubmit = async e => { e.preventDefault(); const a = nval(f, "amt"); if (!(a > 0)) return err(f, "Enter an amount."); if (!val(f, "date")) return err(f, "Pick a date.");
+      await guard(f, async () => { const row = { portfolio: "IN", kind: "deposit", date: val(f, "date"), amount: a, inr: a, note: val(f, "note") || null, meta: {} };
+        if (existing) await STORE.update("ledger", existing.id, row); else await STORE.insert("ledger", row); closeDlg(); toast("Funds added"); }); };
+    return;
+  }
+  const ex = existing && existing.meta || {};
+  const ref = FX ? FX.usdinr : null;
+  const defRate = ref ? PC.defaultRate(ref, S.settings) : PC.defaultRate(S.settings.fx.fallback_rate, S.settings);
+  const f = dlg(`<h3>${existing ? "Edit deposit" : "Add funds"} (US dollars, entered in ₹)</h3>
+    <div class="grid"><label>Amount to send (₹)<input name="inr" type="number" step="any" inputmode="decimal" value="${existing ? existing.inr : ""}"></label><label>Date<input name="date" type="date" value="${existing ? existing.date : today()}"></label></div>
+    ${existing ? "" : '<div class="bar">' + [10000, 25000, 50000, 100000].map(v => `<button type="button" class="chip" data-act="quick" data-v="${v}">+ ₹${v.toLocaleString("en-IN")}</button>`).join("") + "</div>"}
+    <div class="grid"><label>Exchange rate (₹ per $)<input name="rate" type="number" step="any" value="${existing ? ex.rate : defRate}"></label>
+      <label>GST (₹)<input name="gst" type="number" step="any" placeholder="auto" value="${existing && ex.gst_manual ? ex.gst : ""}"></label>
+      <label>Bank charge (₹)<input name="bank" type="number" step="any" placeholder="auto" value="${existing && ex.bank_manual ? ex.bank : ""}"></label>
+      <label>Pay-in charge ($)<input name="payin" type="number" step="any" placeholder="auto" value="${existing && ex.payin_manual ? ex.payin_fee_usd : ""}"></label></div>
+    <p class="hint" style="margin:0 0 8px">${existing ? "Rate shown is the one saved with this deposit." : (ref ? `Rate pre-filled from the USD/INR close of ${esc(FX.date)} (₹${ref}) plus a ${S.settings.fx.markup_pct}% markup.` : "Rate pre-filled from your fallback rate.")} Type over the rate or any charge to match what Dhan shows; leave a charge blank to calculate it.</p>
+    <label class="chk" style="display:block;margin:0 0 8px"><input type="checkbox" name="tcs" ${ex.tcs || S.settings.fx.tcs_enabled ? "checked" : ""}>Include TCS (20% above ₹10 lakh remitted this financial year)</label>
+    <div class="brk" id="brk"></div>
+    <label>Note<input name="note" value="${esc(existing ? existing.note : "")}"></label>${acts("Save")}`);
+  let last = null;
+  const calc = () => {
+    const d = val(f, "date") || today(), fy = PC.fyOf(d);
+    const before = S.ledger.filter(r => r.portfolio === "US" && r.kind === "deposit" && PC.fyOf(r.date) === fy && r.date <= d && (!existing || r.id !== existing.id)).reduce((x, r) => x + (+r.inr || 0), 0);
+    const ov = n => (val(f, n) === "" ? null : val(f, n));
+    last = PC.fundCalc({ inr: val(f, "inr"), rate: val(f, "rate"), gst: ov("gst"), bank: ov("bank"), payin: ov("payin"), settings: S.settings, applyTcs: f.elements.tcs.checked, fyRemittedBefore: before });
+    const b = $("brk"), r = last;
+    if (!r.ok) { b.innerHTML = `<span class="mut">${esc(r.error)}</span>`; return; }
+    f.elements.gst.placeholder = "auto ₹" + r.gst; f.elements.bank.placeholder = "auto ₹" + r.bank; f.elements.payin.placeholder = "auto $" + r.payin_fee_usd;
+    const L = (k, v, c) => `<div class="${c || ""}"><span>${k}</span><span>${v}</span></div>`;
+    b.innerHTML = L("Amount sent", money(r.inr, "IN")) + L("Exchange rate", "₹" + num(r.rate, 4) + " per $") + L("GST on conversion", money(r.gst, "IN")) + (r.bank ? L("Bank charge", money(r.bank, "IN")) : "") +
+      L("Converted", "$" + r.gross_usd.toLocaleString("en-US", { minimumFractionDigits: 2 })) + L("Pay-in charge", "$" + r.payin_fee_usd.toFixed(2)) +
+      (r.tcs ? L("TCS (collected by your bank, recoverable)", money(r.tcs, "IN")) + L("Total out of your bank", money(r.total_inr_out, "IN")) : "") +
+      L("Credited to your US wallet", "$" + r.net_usd.toLocaleString("en-US", { minimumFractionDigits: 2 }), "tot") + L("Effective cost per dollar", "₹" + r.effective_rate.toFixed(2));
+  };
+  f.addEventListener("input", calc); f.addEventListener("change", calc); calc();
+  f.onsubmit = async e => { e.preventDefault(); calc(); if (!last.ok) return err(f, last.error); if (!val(f, "date")) return err(f, "Pick a date.");
+    const meta = { rate: last.rate, gst: last.gst, gst_manual: val(f, "gst") !== "", bank: last.bank, bank_manual: val(f, "bank") !== "", payin_fee_usd: last.payin_fee_usd, payin_manual: val(f, "payin") !== "", gross_usd: last.gross_usd, tcs: last.tcs, effective_rate: last.effective_rate };
+    await guard(f, async () => { const row = { portfolio: "US", kind: "deposit", date: val(f, "date"), amount: last.net_usd, inr: last.inr, note: val(f, "note") || null, meta };
+      if (existing) await STORE.update("ledger", existing.id, row); else await STORE.insert("ledger", row); closeDlg(); toast("Funds added"); }); };
+}
+function withdrawDialog() {
+  const f = dlg(`<h3>Withdraw (${M === "IN" ? "₹" : "$"})</h3><div class="grid"><label>Amount<input name="amt" type="number" step="any" inputmode="decimal"></label><label>Date<input name="date" type="date" value="${today()}"></label></div>
+    <p class="hint">Cash available: ${money(ACC.cash)}. ${M === "US" ? "Withdrawals from Dhan US Stocks are free." : ""}</p><label>Note<input name="note"></label>${acts("Withdraw")}`);
+  f.onsubmit = async e => { e.preventDefault(); const a = nval(f, "amt"); if (!(a > 0)) return err(f, "Enter an amount."); if (a > ACC.cash + 0.005) return err(f, "That is more than the cash available.");
+    await guard(f, async () => { await STORE.insert("ledger", { portfolio: M, kind: "withdrawal", date: val(f, "date") || today(), amount: a, inr: M === "IN" ? a : null, note: val(f, "note") || null, meta: {} }); closeDlg(); toast("Withdrawal recorded"); }); };
+}
+function editWithdrawal(r) {
+  const f = dlg(`<h3>Edit withdrawal</h3><div class="grid"><label>Amount<input name="amt" type="number" step="any" value="${r.amount}"></label><label>Date<input name="date" type="date" value="${r.date}"></label></div><label>Note<input name="note" value="${esc(r.note)}"></label>${acts("Save")}`);
+  f.onsubmit = async e => { e.preventDefault(); const a = nval(f, "amt"); if (!(a > 0)) return err(f, "Enter an amount.");
+    await guard(f, async () => { await STORE.update("ledger", r.id, { amount: a, date: val(f, "date"), note: val(f, "note") || null }); closeDlg(); }); };
+}
+
+/* orders */
+async function symbolList() {
+  if (SYMS[M]) return SYMS[M];
+  try { const d = await (await fetch(MKT[M].file)).json(); SYMS[M] = d.rows.map(r => ({ sym: r.sym, name: r.name, close: r.close })); } catch (e) { SYMS[M] = []; }
+  return SYMS[M];
+}
+function refPrice(sym) {
+  const yf = toYf(sym, M), arr = PM[yf]; if (arr && arr.length) return arr[arr.length - 1].close;
+  const s = (SYMS[M] || []).find(x => x.sym === sym); return s ? s.close : null;
+}
+function orderDialog(pref) {
+  pref = pref || {};
+  const f = dlg(`<h3>New order (${MKT[M].name})</h3>
+    <div class="grid"><label>Symbol<input name="sym" list="symlist" autocomplete="off" value="${esc(pref.sym || "")}"><datalist id="symlist"></datalist></label>
+      <label>Side<select name="side"><option>BUY</option><option>SELL</option></select></label>
+      <label>Quantity<input name="qty" type="number" step="${M === "IN" ? 1 : "any"}" inputmode="decimal"></label>
+      <label>Type<select name="type"><option value="MARKET">Market (next open)</option><option value="LIMIT">Limit</option><option value="STOP">Stop</option></select></label>
+      <label id="l-price" hidden>Price<input name="price" type="number" step="any" inputmode="decimal"></label>
+      <label>Fill from sessions after<input name="after" type="date" value="${lastSession()}"></label>
+      <label>Expires (optional)<input name="expiry" type="date"></label>
+      <label>Tag (optional)<input name="tag" list="taglist" value="${esc(pref.tag || "")}"><datalist id="taglist">${[...new Set(S.fills.concat(S.orders).map(x => x.tag).filter(Boolean))].map(t => `<option value="${esc(t)}">`).join("")}</datalist></label></div>
+    <div id="buyonly"><div class="grid"><label>Planned stop (for R-multiples)<input name="stopref" type="number" step="any" value="${pref.stop || ""}"></label>
+      <label>Bracket: stop-loss price<input name="bstop" type="number" step="any" placeholder="optional"></label>
+      <label>Bracket: target price<input name="btgt" type="number" step="any" placeholder="optional"></label></div></div>
+    <label>Note<input name="note" value="${esc(pref.note || "")}"></label>
+    <p class="hint" id="est" style="margin:10px 0 0"></p>${acts("Place order")}`);
+  const sync = () => {
+    $("l-price").hidden = f.elements.type.value === "MARKET";
+    $("buyonly").hidden = f.elements.side.value !== "BUY";
+    const sym = val(f, "sym").toUpperCase(), q = +val(f, "qty") || 0, px = +val(f, "price") || refPrice(sym), s = (SYMS[M] || []).find(x => x.sym === sym);
+    let t = s ? `${esc(s.name)} · last screened close ${money(s.close)}. ` : "";
+    if (px && q) { const fee = PC.tradeFees(M, f.elements.side.value, q, px, S.settings, true); t += `About ${money(q * px)} plus ${money(fee.total)} charges. Cash available: ${money(ACC.cash)}.`; }
+    $("est").innerHTML = t;
+  };
+  f.addEventListener("input", sync); f.addEventListener("change", sync);
+  f.elements.sym.addEventListener("focus", async () => { const L = await symbolList(); $("symlist").innerHTML = L.map(s => `<option value="${esc(s.sym)}">${esc(s.name)}</option>`).join(""); sync(); }, { once: true });
+  if (pref.side) f.elements.side.value = pref.side; if (pref.qty) f.elements.qty.value = pref.qty; if (pref.type) f.elements.type.value = pref.type;
+  if (pref.sym && !SYMS[M]) symbolList().then(sync);
+  sync();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const sym = val(f, "sym").toUpperCase().replace(/\.NS$/, ""), side = f.elements.side.value, type = f.elements.type.value, qty = nval(f, "qty"), price = nval(f, "price");
+    const bstop = side === "BUY" ? nval(f, "bstop") : null, btgt = side === "BUY" ? nval(f, "btgt") : null;
+    if (!sym) return err(f, "Enter a symbol."); if (!(qty > 0)) return err(f, "Enter a quantity.");
+    if (M === "IN" && !Number.isInteger(qty)) return err(f, "Indian shares trade in whole numbers.");
+    if (type !== "MARKET" && !(price > 0)) return err(f, "Enter a price for a limit or stop order.");
+    if (!val(f, "after")) return err(f, "Pick the date after which the order can fill.");
+    if (bstop != null && btgt != null && btgt <= bstop) return err(f, "The target must be above the stop-loss.");
+    if (type !== "MARKET" && bstop != null && bstop >= price) return err(f, "The stop-loss must be below your entry price.");
+    const base = { portfolio: M, symbol: sym, yf: toYf(sym, M), qty, after_date: val(f, "after"), expiry: val(f, "expiry") || null, tag: val(f, "tag") || null, note: val(f, "note") || null };
+    await guard(f, async () => {
+      const parent = await STORE.insert("orders", { ...base, side, type, price: type === "MARKET" ? null : price, oco_group: null, parent_id: null, stop_ref: side === "BUY" ? nval(f, "stopref") : null, status: "pending" });
+      const g = bstop != null && btgt != null ? uuid() : null;
+      if (bstop != null) await STORE.insert("orders", { ...base, side: "SELL", type: "STOP", price: bstop, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
+      if (btgt != null) await STORE.insert("orders", { ...base, side: "SELL", type: "LIMIT", price: btgt, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
+      closeDlg(); VIEW = "ord"; OFILTER = "open"; ls.set("paper-v", VIEW); toast("Order placed. It fills after the next market close.");
+    });
+  };
+}
+function editOrderDialog(o) {
+  const f = dlg(`<h3>Edit order: ${esc(o.side)} ${esc(o.symbol)}</h3><div class="grid"><label>Quantity<input name="qty" type="number" step="${M === "IN" ? 1 : "any"}" value="${o.qty}"></label>
+    ${o.type === "MARKET" ? "" : `<label>${o.type === "STOP" ? "Stop price" : "Limit price"}<input name="price" type="number" step="any" value="${o.price}"></label>`}
+    <label>Fill from sessions after<input name="after" type="date" value="${esc(o.after_date)}"></label><label>Expires<input name="expiry" type="date" value="${esc(o.expiry || "")}"></label>
+    <label>Tag<input name="tag" value="${esc(o.tag || "")}"></label></div><label>Note<input name="note" value="${esc(o.note || "")}"></label>${acts("Save")}`);
+  f.onsubmit = async e => { e.preventDefault(); const qty = nval(f, "qty"), price = o.type === "MARKET" ? null : nval(f, "price");
+    if (!(qty > 0)) return err(f, "Enter a quantity."); if (o.type !== "MARKET" && !(price > 0)) return err(f, "Enter a price.");
+    await guard(f, async () => { await STORE.update("orders", o.id, { qty, price, after_date: val(f, "after"), expiry: val(f, "expiry") || null, tag: val(f, "tag") || null, note: val(f, "note") || null }); closeDlg(); toast("Order updated"); }); };
+}
+function stopDialog(sym) {
+  const p = ACC.positions.find(x => x.symbol === sym), so = stopOrderFor(sym);
+  const f = dlg(`<h3>${so ? "Move" : "Set"} stop: ${esc(sym)}</h3><p class="hint">Sell all ${num(p.qty)} shares if the price falls to the stop. Last close ${money(p.price)}.</p>
+    <div class="grid"><label>Stop price<input name="price" type="number" step="any" value="${so ? so.price : ""}"></label><label>Fill from sessions after<input name="after" type="date" value="${so ? esc(so.after_date) : lastSession()}"></label></div>${acts("Save stop")}`);
+  f.onsubmit = async e => { e.preventDefault(); const px = nval(f, "price"); if (!(px > 0)) return err(f, "Enter a stop price."); if (px >= p.price) return err(f, "A stop sits below the current price; otherwise it would trigger immediately.");
+    await guard(f, async () => { if (so) await STORE.update("orders", so.id, { price: px, qty: p.qty, after_date: val(f, "after") });
+      else await STORE.insert("orders", { portfolio: M, symbol: sym, yf: p.yf, side: "SELL", type: "STOP", qty: p.qty, price: px, after_date: val(f, "after"), expiry: null, oco_group: null, parent_id: null, stop_ref: null, tag: p.tag || null, note: null, status: "pending" });
+      closeDlg(); toast("Stop saved"); }); };
+}
+
+/* fills */
+function fillDialog(fl) {
+  const isNew = !fl, sel = isNew ? { side: "BUY", date: today() } : fl;
+  const f = dlg(`<h3>${isNew ? "Add a trade by hand" : "Edit executed order"}</h3>
+    <div class="grid"><label>Symbol<input name="sym" ${isNew ? "" : "readonly"} value="${esc(sel.symbol || "")}"></label>
+      <label>Side<select name="side" ${isNew ? "" : "disabled"}><option ${sel.side === "BUY" ? "selected" : ""}>BUY</option><option ${sel.side === "SELL" ? "selected" : ""}>SELL</option></select></label>
+      <label>Date<input name="date" type="date" value="${esc(sel.date)}"></label>
+      <label>Quantity<input name="qty" type="number" step="${M === "IN" ? 1 : "any"}" value="${sel.qty || ""}"></label>
+      <label>Price<input name="price" type="number" step="any" value="${sel.price || ""}"></label>
+      <label>Planned stop (BUY)<input name="stopref" type="number" step="any" value="${sel.stop_ref || ""}"></label>
+      <label>Tag<input name="tag" value="${esc(sel.tag || "")}"></label></div>
+    <label>Note<input name="note" value="${esc(sel.note || "")}"></label>
+    <label class="chk" style="display:block;margin:10px 0"><input type="checkbox" name="recalc" checked>Recalculate charges from Settings</label>
+    <label id="l-fee" hidden>Charges (${MKT[M].cur})<input name="fee" type="number" step="any" value="${sel.fees_total != null ? sel.fees_total : ""}"></label>
+    <div class="brk" id="brk"></div>${acts("Save")}`);
+  const dpOK = () => !S.fills.some(x => x.portfolio === M && x.side === "SELL" && x.symbol === val(f, "sym").toUpperCase() && x.date === val(f, "date") && (!fl || x.id !== fl.id) && x.fees && x.fees.dp > 0);
+  const calc = () => {
+    $("l-fee").hidden = f.elements.recalc.checked;
+    const q = +val(f, "qty"), p = +val(f, "price"); if (!(q > 0 && p > 0)) { $("brk").innerHTML = ""; return null; }
+    const side = isNew ? f.elements.side.value : fl.side, fee = PC.tradeFees(M, side, q, p, S.settings, dpOK());
+    $("brk").innerHTML = `<div><span>Value</span><span>${money(q * p)}</span></div>` + Object.keys(fee).filter(k => k !== "total" && fee[k]).map(k => `<div><span>${k}</span><span>${money(fee[k])}</span></div>`).join("") + `<div class="tot"><span>Charges</span><span>${money(fee.total)}</span></div>`;
+    return fee;
+  };
+  f.addEventListener("input", calc); f.addEventListener("change", calc); calc();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const sym = val(f, "sym").toUpperCase().replace(/\.NS$/, ""), q = nval(f, "qty"), p = nval(f, "price"), side = isNew ? f.elements.side.value : fl.side;
+    if (!sym) return err(f, "Enter a symbol."); if (!(q > 0) || !(p > 0)) return err(f, "Enter a quantity and a price."); if (!val(f, "date")) return err(f, "Pick a date.");
+    if (M === "IN" && !Number.isInteger(q)) return err(f, "Indian shares trade in whole numbers.");
+    let fees = calc(); if (!f.elements.recalc.checked) { const t = nval(f, "fee"); if (t == null || t < 0) return err(f, "Enter the charges."); fees = { total: t, custom: true }; }
+    const row = { portfolio: M, symbol: sym, yf: isNew ? toYf(sym, M) : fl.yf, side, qty: q, price: p, date: val(f, "date"), fees, fees_total: fees.total,
+      stop_ref: side === "BUY" ? nval(f, "stopref") : null, tag: val(f, "tag") || null, note: val(f, "note") || null };
+    await guard(f, async () => { if (isNew) await STORE.insert("fills", { ...row, order_id: null, source: "manual" }); else await STORE.update("fills", fl.id, { ...row, source: fl.source === "manual" ? "manual" : "edited" }); closeDlg(); toast("Saved"); });
+  };
+}
+
+/* ------------------------------------------------------------ click router -- */
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id, find = (arr) => arr.find(x => x.id === id);
+  switch (act) {
+    case "mkt": M = b.dataset.v; ls.set("paper-m", M); return render();
+    case "view": VIEW = b.dataset.v; ls.set("paper-v", VIEW); return render();
+    case "ofilter": OFILTER = b.dataset.v; return render();
+    case "closedlg": return closeDlg();
+    case "quick": { const i = $("dform").elements[M === "IN" ? "amt" : "inr"]; i.value = (+i.value || 0) + +b.dataset.v; i.dispatchEvent(new Event("input", { bubbles: true })); return; }
+    case "addfunds": return addFundsDialog();
+    case "withdraw": return withdrawDialog();
+    case "editfund": { const r = find(S.ledger); return r.kind === "deposit" ? addFundsDialog(r) : editWithdrawal(r); }
+    case "delfund": {
+      const r = find(S.ledger), without = PC.buildAccount(S.ledger.filter(x => x.portfolio === M && x.id !== id), S.fills.filter(x => x.portfolio === M), PM, MKT[M].bench);
+      if (r.kind === "deposit" && without.cash < -0.005) return toast("Deleting this deposit would leave cash negative.");
+      if (!confirm("Delete this " + r.kind + " of " + money(r.amount) + "?")) return;
+      await STORE.remove("ledger", id); await reload(); return render();
+    }
+    case "neworder": return orderDialog();
+    case "sell": { const p = ACC.positions.find(x => x.symbol === b.dataset.sym); return orderDialog({ sym: p.symbol, side: "SELL", qty: p.qty, type: "MARKET" }); }
+    case "setstop": return stopDialog(b.dataset.sym);
+    case "editorder": return editOrderDialog(find(S.orders));
+    case "cancelorder": {
+      if (!confirm("Cancel this order?")) return;
+      await STORE.update("orders", id, { status: "cancelled", status_note: "cancelled by you" });
+      for (const c of S.orders.filter(x => x.parent_id === id && x.status === "waiting")) await STORE.update("orders", c.id, { status: "cancelled", status_note: "entry order cancelled" });
+      await reload(); return render();
+    }
+    case "delorder": { if (!confirm("Remove this order from the list?")) return; await STORE.remove("orders", id); await reload(); return render(); }
+    case "addfill": return fillDialog();
+    case "editfill": return fillDialog(find(S.fills));
+    case "delfill": {
+      const fl = find(S.fills);
+      if (!confirm(`Delete this ${fl.side} of ${num(fl.qty)} ${fl.symbol} on ${fl.date}? Positions and P&L will recalculate.`)) return;
+      await STORE.remove("fills", id);
+      if (fl.order_id) { try { await STORE.update("orders", fl.order_id, { status: "cancelled", status_note: "its fill was deleted" }); } catch (x) {} }
+      await reload(); return render();
+    }
+    case "savesettings": {
+      const out = PC.mergeSettings(S.settings);
+      document.querySelectorAll("[data-s]").forEach(el => { const [g, k] = el.dataset.s.split("."); out[g][k] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : (el.value === "" ? out[g][k] : +el.value); });
+      await STORE.saveSettings(out); await reload(); render(); return toast("Settings saved");
+    }
+    case "resetsettings": if (!confirm("Reset every rate to the defaults?")) return; await STORE.saveSettings({}); await reload(); render(); return toast("Defaults restored");
+    case "export": {
+      const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), ledger: S.ledger, orders: S.orders, fills: S.fills, settings: S.settings }, null, 1)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "paper-trading-backup-" + today() + ".json"; a.click(); return;
+    }
+  }
+});
+
+function handleParams() {
+  const q = new URLSearchParams(location.search), sym = q.get("sym");
+  if (!sym) return;
+  const m = q.get("m") === "US" ? "US" : "IN"; M = m; ls.set("paper-m", M); render();
+  history.replaceState(null, "", location.pathname);
+  orderDialog({ sym: sym, side: "BUY", type: "MARKET", stop: q.get("stop") || "", tag: "screener", note: "From the screener" + (q.get("px") ? ` (close ${q.get("px")})` : "") });
+}
+buildTabs();
+boot();
+</script>
+</body>
+</html>
