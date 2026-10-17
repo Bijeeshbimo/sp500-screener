@@ -191,7 +191,7 @@ function showAuth() {
   const cred = () => ({ email: $("a-email").value.trim(), password: $("a-pass").value });
   $("a-in").onclick = async () => { const r = await STORE.sb.auth.signInWithPassword(cred()); if (r.error) msg(r.error.message); else { $("auth").hidden = true; start(); } };
   $("a-up").onclick = async () => {
-    const r = await STORE.sb.auth.signUp(cred());
+    const r = await STORE.sb.auth.signUp({ ...cred(), options: { emailRedirectTo: location.origin + location.pathname } });   // the confirmation link comes back to this page
     if (r.error) return msg(r.error.message);
     if (r.data.session) { $("auth").hidden = true; start(); } else msg("Account created. Check your email to confirm it, then sign in.", true);
   };

@@ -103,7 +103,7 @@ A practice account that lives beside the screener: add (pretend) funds, place or
 1. **Supabase** (free): create a project, then **SQL Editor → New query**, paste all of `paper/schema.sql` and press **Run**.
 2. **Connect the page:** put the Project URL and the *publishable* (anon) key in `docs/paper-config.js`. These are meant to be public; your data is protected by your login and row-level security. Never put the `service_role` key in the repo.
 3. **Let the daily job fill orders:** in GitHub go to **Settings → Secrets and variables → Actions → New repository secret** and add `SUPABASE_URL` (the same URL) and `SUPABASE_SERVICE_KEY` (the `service_role` / secret key from Supabase → Project Settings → API). Without these the page still works, but orders are never filled.
-4. Open `paper.html`, press **Create account**, and sign in. If you want to skip the confirmation email, turn off **Confirm email** under Supabase → Authentication → Sign In / Providers → Email. Afterwards, consider turning off **Allow new users to sign up** so nobody else can register.
+4. Open `paper.html`, press **Create account**, and sign in. In Supabase → Authentication → URL Configuration, set **Site URL** to your page's address (the one ending in `/paper.html`'s folder, e.g. `https://YOURNAME.github.io/sp500-screener/`) and add the same address under **Redirect URLs**; otherwise confirmation emails link to `localhost:3000`, which does not exist. If you want to skip the confirmation email, turn off **Confirm email** under Supabase → Authentication → Sign In / Providers → Email. Afterwards, consider turning off **Allow new users to sign up** so nobody else can register.
 
 Until step 2 is done the page runs in **demo mode**: everything is saved in that browser only.
 
