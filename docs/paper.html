@@ -184,13 +184,15 @@ async function boot() {
     const { data } = await STORE.sb.auth.getSession();
     STORE.sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") showAuth(); });
     if (data.session) start(); else showAuth();
-  } catch (e) { banner("Could not start: " + esc(e.message), true); }
+  } catch (e) { banner("Could not start: " + esc(netHint(e.message)), true); }
 }
+const BLOCK_HINT = " The page could not reach Supabase. Since February 2026 some Indian internet providers (Jio, Airtel, ACT) block supabase.co. Try mobile data or another network, or set up the free relay described in the README under \u201cIf Supabase is blocked\u201d.";
+const netHint = m => { m = String(m || ""); return /fetch|network|load failed|timed? ?out/i.test(m) ? m + BLOCK_HINT : m; };
 function showAuth() {
   $("app").hidden = true; $("auth").hidden = false; $("who").textContent = "";
-  const msg = (t, ok) => { $("a-msg").style.color = ok ? "var(--up)" : ""; $("a-msg").textContent = t; };
+  const msg = (t, ok) => { $("a-msg").style.color = ok ? "var(--up)" : ""; $("a-msg").textContent = ok ? t : netHint(t); };
   const cred = () => ({ email: $("a-email").value.trim(), password: $("a-pass").value });
-  $("a-in").onclick = async () => { const r = await STORE.sb.auth.signInWithPassword(cred()); if (r.error) msg(r.error.message); else { $("auth").hidden = true; start(); } };
+  $("a-in").onclick = async () => { try { const r = await STORE.sb.auth.signInWithPassword(cred()); if (r.error) msg(r.error.message); else { $("auth").hidden = true; start(); } } catch (e) { msg(e.message); } };
   $("a-up").onclick = async () => {
     const r = await STORE.sb.auth.signUp({ ...cred(), options: { emailRedirectTo: location.origin + location.pathname } });   // the confirmation link comes back to this page
     if (r.error) return msg(r.error.message);
@@ -220,7 +222,7 @@ async function reload() {
     PM = {};
     for (const p of prices) (PM[p.yf] = PM[p.yf] || []).push({ date: p.date, close: +p.close });
     for (const k in PM) PM[k].sort((a, b) => (a.date < b.date ? -1 : 1));
-  } catch (e) { banner("Could not load your data: " + esc(e.message), true); }
+  } catch (e) { banner("Could not load your data: " + esc(netHint(e.message)), true); }
 }
 function buildTabs() {
   $("mk").innerHTML = Object.keys(MKT).map(k => `<button class="tab" role="tab" data-act="mkt" data-v="${k}">${MKT[k].name}</button>`).join("");

@@ -110,6 +110,20 @@ Until step 2 is done the page runs in **demo mode**: everything is saved in that
 
 The order engine (`paper/engine.py`) runs in the same daily workflow right after the screener. It uses only completed daily bars, never fills an order twice, and its failure cannot stop the screener.
 
+### If Supabase is blocked on your internet provider
+
+Since February 2026 several Indian providers (Jio, Airtel, ACT) block `supabase.co`. The symptom is **"NetworkError when attempting to fetch resource"** when you sign in. To check, open `https://<your-project>.supabase.co/auth/v1/health` in the same browser: a short message such as *No API key found* means it is reachable; a page that never loads means it is blocked. The Supabase dashboard (`supabase.com`) is not affected, and neither is the daily job, because GitHub's servers are not behind these providers.
+
+Fix: a free relay on Cloudflare that only forwards your own sign-in and table requests (`paper/cloudflare-worker.js`).
+
+1. Sign up at cloudflare.com (free), then **Workers & Pages → Create → Create Worker**, name it (for example `paper-relay`), **Deploy**, then **Edit code**.
+2. Replace everything with the contents of `paper/cloudflare-worker.js` and **Deploy**. Check the two lines at the top (your Supabase URL and `https://<you>.github.io`).
+3. Copy the worker's address (`https://paper-relay.<name>.workers.dev`) into `supabaseUrl` in `docs/paper-config.js`. Keep the same publishable key.
+4. Leave the GitHub secret `SUPABASE_URL` as the original `supabase.co` address.
+5. The confirmation email's link points at `supabase.co` and will not open on a blocked network. Create your user in the dashboard instead: **Authentication → Users → Add user**, tick **Auto Confirm User**.
+
+Test it with `node paper/test_worker.mjs`. Quick but per-device alternatives: switch to mobile data or another network, or change DNS to `1.1.1.1`.
+
 **Tests:** `python3 paper/test_paper.py` (fees, fills, brackets, gaps) and `node paper/test_core.js` (funds maths, positions, P&L, insights).
 
 ---
@@ -162,6 +176,7 @@ docs/paper-core.js           its calculations (funds, fees, positions, stats)
 docs/paper-config.js         your Supabase URL + publishable key
 docs/fx.json                 latest USD/INR, written by the daily job
 paper/schema.sql             database tables to paste into Supabase
+paper/cloudflare-worker.js   optional relay for networks that block supabase.co
 paper/engine.py, fees.py     the daily order engine and the Dhan charges
 paper/test_*.py, test_core.js  tests
 ```
