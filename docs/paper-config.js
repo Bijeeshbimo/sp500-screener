@@ -6,9 +6,9 @@
 // NEVER put a service-account key here.
 window.PAPER_CONFIG = {
   firebase: {
-    apiKey: "",
-    authDomain: "",
-    projectId: "",
-    appId: "",
+    apiKey: "AIzaSyCK_QvjnnsMkPbMmsh3gCGEJMishLiBNe8",
+    authDomain: "paper--trading.firebaseapp.com",
+    projectId: "paper--trading",
+    appId: "1:213439773379:web:3268c57e9910f52ad98076",
   },
 };
