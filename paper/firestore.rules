@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Everything for the paper-trading page lives under users/{your user id}/...
+    // Only that signed-in user can read or write it. The daily job uses a service account, which bypasses these rules.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

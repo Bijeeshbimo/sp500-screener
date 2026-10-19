@@ -3,8 +3,11 @@
 Paper-trading order engine (end-of-day). Runs in the daily GitHub Action right after the screener.
 
   1. writes docs/fx.json (latest USD/INR close, used to pre-fill the Add Funds dialog)
-  2. if SUPABASE_URL and SUPABASE_SERVICE_KEY are set: reads each user's pending orders, downloads daily bars,
+  2. if FIREBASE_SERVICE_ACCOUNT is set: reads each user's pending orders from Firestore, downloads daily bars,
      fills what the bars allow, stores the fills and daily closes, and updates order statuses.
+
+Data layout (Firestore): users/{uid}/ledger | orders | fills | prices | settings. The security rules let a signed-in
+user touch only their own folder; this script uses a service account, which bypasses the rules.
 
 Fill rules (daily bars only, so deliberately simple and conservative):
   MARKET        fills at the first eligible session's open
@@ -14,6 +17,7 @@ Fill rules (daily bars only, so deliberately simple and conservative):
   Orders in one OCO group cancel each other; if both trigger on the same bar, the STOP wins (setting).
   Bracket children (parent_id) wait until the parent fills, then become live from the NEXT session.
   A buy without enough cash, or a sell of shares you do not hold, is rejected (no margin, no shorting).
+An automatic fill is stored under the id "auto-<order id>", so running the engine twice can never fill an order twice.
 """
 from __future__ import annotations
 
@@ -171,36 +175,40 @@ def account_state(portfolio: str, ledger: list[dict], fills: list[dict]) -> tupl
 
 
 # ---------------------------------------------------------------------- io ---
-class Rest:
-    """Minimal Supabase PostgREST client (service key, so row-level security is bypassed)."""
+class FirestoreStore:
+    """All database access lives here, so the rest of the engine can be tested with a fake."""
 
-    def __init__(self, url: str, key: str):
-        import requests
-        self.s = requests.Session()
-        self.base = url.rstrip("/") + "/rest/v1/"
-        self.s.headers.update({"apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    def __init__(self, service_account_json: str):
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+        app = firebase_admin.initialize_app(credentials.Certificate(json.loads(service_account_json)))
+        self.db = firestore.client(app)
 
-    def get(self, table: str, **params) -> list[dict]:
-        rows, start = [], 0
-        while True:
-            r = self.s.get(self.base + table, params={"select": "*", **params},
-                           headers={"Range": f"{start}-{start + 999}"}, timeout=60)
-            r.raise_for_status()
-            chunk = r.json()
-            rows += chunk
-            if len(chunk) < 1000:
-                return rows
-            start += 1000
+    def users(self) -> list[str]:
+        # list_documents also returns users that only have sub-collections (no document of their own)
+        return sorted(d.id for d in self.db.collection("users").list_documents())
 
-    def insert(self, table: str, rows: list[dict] | dict, upsert: str | None = None):
-        h = {"Prefer": "return=minimal" + (f",resolution=merge-duplicates" if upsert else "")}
-        params = {"on_conflict": upsert} if upsert else {}
-        return self.s.post(self.base + table, json=rows, headers=h, params=params, timeout=60)
+    def rows(self, uid: str, name: str) -> list[dict]:
+        return [{"id": d.id, **(d.to_dict() or {})} for d in self.db.collection(f"users/{uid}/{name}").stream()]
 
-    def patch(self, table: str, row_id: str, patch: dict):
-        r = self.s.patch(self.base + table, params={"id": "eq." + row_id}, json=patch,
-                         headers={"Prefer": "return=minimal"}, timeout=60)
-        r.raise_for_status()
+    def settings(self, uid: str) -> dict:
+        d = self.db.document(f"users/{uid}/settings/main").get()
+        return (d.to_dict() or {}).get("data", {}) if d.exists else {}
+
+    def create_fill(self, uid: str, order_id: str, row: dict) -> bool:
+        """False if this order already has its automatic fill (a previous run got there first)."""
+        from google.api_core.exceptions import AlreadyExists
+        try:
+            self.db.document(f"users/{uid}/fills/auto-{order_id}").create(row)
+            return True
+        except AlreadyExists:
+            return False
+
+    def patch_order(self, uid: str, order_id: str, patch: dict) -> None:
+        self.db.document(f"users/{uid}/orders/{order_id}").update(patch)
+
+    def put_prices(self, uid: str, yf: str, dates: list[str], closes: list[float]) -> None:
+        self.db.document(f"users/{uid}/prices/{yf.replace('/', '_')}").set({"yf": yf, "dates": dates, "closes": closes})
 
 
 def fetch_bars(yfs: list[str], start: str) -> dict[str, list[tuple]]:
@@ -247,60 +255,70 @@ def write_fx() -> None:
         print("fx skipped:", e)
 
 
+def run_user(store, uid: str, fetch=None) -> dict:
+    """Process one user. `store` is a FirestoreStore (or a fake in tests); `fetch(yfs, start)` returns the bars."""
+    fetch = fetch or fetch_bars
+    orders, ledger, fills = store.rows(uid, "orders"), store.rows(uid, "ledger"), store.rows(uid, "fills")
+    settings = merged_settings(store.settings(uid))
+    o_u = [o for o in orders if o.get("status") in ("pending", "waiting")]
+    live_ids = {o["id"] for o in o_u}
+    fill_date = {f["order_id"]: f["date"] for f in fills if f.get("order_id")}
+    for o in list(o_u):                      # repair bracket children whose parent was settled by an earlier run
+        if o["status"] == "waiting" and o.get("parent_id") not in live_ids:
+            if o["parent_id"] in fill_date:
+                patch = {"status": "pending", "after_date": fill_date[o["parent_id"]], "status_note": None}
+            else:
+                patch = {"status": "cancelled", "status_note": "entry order did not fill"}
+            store.patch_order(uid, o["id"], patch)
+            o.update(patch)
+    o_u = [o for o in o_u if o["status"] in ("pending", "waiting")]
+    portfolios = {r["portfolio"] for r in ledger + fills + o_u}
+    yfs = {r["yf"] for r in o_u} | {r["yf"] for r in fills} | {BENCH[p] for p in portfolios}
+    starts = [r["after_date"] for r in o_u] + [r["date"] for r in fills] + [r["date"] for r in ledger]
+    summary = {"fills": 0, "updates": 0, "missing": []}
+    if not yfs or not starts:
+        return summary
+    start = (dt.date.fromisoformat(min(starts)) - dt.timedelta(days=7)).isoformat()
+    bars = fetch(sorted(yfs), start)
+    missing = sorted(y for y in yfs if y not in bars)
+    summary["missing"] = missing
+    if missing:
+        print("no price data for", missing)
+    for t, rows in bars.items():             # the whole window every time, so the stored series is always complete
+        store.put_prices(uid, t, [b[0] for b in rows], [round(b[4], 4) for b in rows])
+    now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    for p in ("IN", "US"):
+        po = [o for o in o_u if o["portfolio"] == p]
+        if not po:
+            continue
+        cash, hold, dp_done = account_state(p, ledger, fills)
+        res = simulate(po, {y: bars[y] for y in {o["yf"] for o in po} if y in bars}, cash, hold, dp_done, p, settings)
+        for f in res["fills"]:
+            store.create_fill(uid, f["order_id"], {**f, "created_at": now})     # False = an earlier run already did this one
+        for oid, patch in res["updates"].items():
+            store.patch_order(uid, oid, patch)
+        for o in po:                          # flag a ticker Yahoo has no data for (possible typo)
+            if o["id"] not in res["updates"] and o["yf"] in missing and not o.get("status_note"):
+                store.patch_order(uid, o["id"], {"status_note": f"no price data found for {o['yf']}"})
+        summary["fills"] += len(res["fills"]); summary["updates"] += len(res["updates"])
+        print(f"{p}: {len(res['fills'])} fill(s), {len(res['updates'])} order update(s)")
+    return summary
+
+
 def main() -> int:
     write_fx()
-    url, key = os.environ.get("SUPABASE_URL", "").strip(), os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
-    if not url or not key:
-        print("paper engine: SUPABASE_URL / SUPABASE_SERVICE_KEY not set, nothing to do")
+    sa = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip()
+    if not sa:
+        print("paper engine: FIREBASE_SERVICE_ACCOUNT is not set, nothing to do")
         return 0
-    db = Rest(url, key)
-    orders = db.get("paper_orders", status="in.(pending,waiting)")
-    ledger, fills, saved = db.get("paper_ledger"), db.get("paper_fills"), db.get("paper_settings")
-    users = {r["user_id"] for r in ledger} | {r["user_id"] for r in orders} | {r["user_id"] for r in fills}
-    for uid in sorted(users):
-        mine = lambda rows: [r for r in rows if r["user_id"] == uid]          # noqa: E731
-        o_u, l_u, f_u = mine(orders), mine(ledger), mine(fills)
-        settings = merged_settings(next((r["data"] for r in saved if r["user_id"] == uid), {}))
-        live_ids = {o["id"] for o in o_u}
-        fill_date = {f["order_id"]: f["date"] for f in f_u if f.get("order_id")}
-        for o in list(o_u):                      # repair bracket children whose parent was settled by an earlier run
-            if o["status"] == "waiting" and o.get("parent_id") not in live_ids:
-                if o["parent_id"] in fill_date:
-                    patch = {"status": "pending", "after_date": fill_date[o["parent_id"]], "status_note": None}
-                else:
-                    patch = {"status": "cancelled", "status_note": "entry order did not fill"}
-                db.patch("paper_orders", o["id"], patch)
-                o.update(patch)
-        o_u = [o for o in o_u if o["status"] in ("pending", "waiting")]
-        yfs = {r["yf"] for r in o_u} | {r["yf"] for r in f_u} | {BENCH[p] for p in {r["portfolio"] for r in l_u + f_u + o_u}}
-        starts = [r["after_date"] for r in o_u] + [r["date"] for r in f_u] + [r["date"] for r in l_u]
-        if not yfs or not starts:
-            continue
-        start = (dt.date.fromisoformat(min(starts)) - dt.timedelta(days=7)).isoformat()
-        bars = fetch_bars(sorted(yfs), start)
-        missing = sorted(y for y in yfs if y not in bars)
-        if missing:
-            print("no price data for", missing)
-        price_rows = [{"user_id": uid, "yf": t, "date": b[0], "close": round(b[4], 4)} for t, rows in bars.items() for b in rows]
-        for i in range(0, len(price_rows), 500):
-            db.insert("paper_prices", price_rows[i:i + 500], upsert="user_id,yf,date").raise_for_status()
-        for p in ("IN", "US"):
-            po = [o for o in o_u if o["portfolio"] == p]
-            if not po:
-                continue
-            cash, hold, dp_done = account_state(p, l_u, f_u)
-            res = simulate(po, {y: bars[y] for y in {o["yf"] for o in po} if y in bars}, cash, hold, dp_done, p, settings)
-            for f in res["fills"]:
-                r = db.insert("paper_fills", {**f, "user_id": uid})
-                if r.status_code == 409:                 # this order was already filled by an earlier run
-                    continue
-                r.raise_for_status()
-            for oid, patch in res["updates"].items():
-                db.patch("paper_orders", oid, patch)
-            for o in po:                                  # flag a ticker Yahoo has no data for (possible typo)
-                if o["id"] not in res["updates"] and o["yf"] in missing and not o.get("status_note"):
-                    db.patch("paper_orders", o["id"], {"status_note": f"no price data found for {o['yf']}"})
-            print(f"{p}: {len(res['fills'])} fill(s), {len(res['updates'])} order update(s)")
+    try:
+        store = FirestoreStore(sa)
+        users = store.users()
+    except Exception as e:
+        print("paper engine: could not open the database:", e)
+        return 1
+    for uid in users:
+        run_user(store, uid)
     return 0
 
 

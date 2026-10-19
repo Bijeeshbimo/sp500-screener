@@ -40,12 +40,15 @@ jobs:
         run: python screener.py
 
       # Paper trading: fills pending orders from the day's complete bars and refreshes docs/fx.json.
-      # Does nothing until the two secrets exist, and never blocks the screener if it fails.
+      # Does nothing until the FIREBASE_SERVICE_ACCOUNT secret exists, and never blocks the screener if it fails.
+      - name: Install paper-trading dependencies
+        continue-on-error: true
+        run: pip install -r paper/requirements.txt
+
       - name: Run paper-trading engine
         continue-on-error: true
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: python paper/engine.py
 
       - name: Commit updated page

@@ -157,59 +157,98 @@ function localStore() {
   };
 }
 function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => no(new Error("Could not load " + src)); document.head.appendChild(s); }); }
-async function cloudStore() {
-  await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
-  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
-  const T = t => "paper_" + t, ck = r => { if (r.error) throw new Error(r.error.message); return r.data; };
+
+/* Firebase (Google): email + password sign-in, and Firestore for the data.
+   Everything lives under users/{your uid}/..., and the security rules only let you into your own folder. */
+const FB_VERSION = "10.12.0";
+const FB_HOSTS = ["https://www.gstatic.com/firebasejs/" + FB_VERSION + "/", "https://cdnjs.cloudflare.com/ajax/libs/firebase/" + FB_VERSION + "/"];
+async function loadFirebase() {
+  for (const f of ["firebase-app-compat.js", "firebase-auth-compat.js", "firebase-firestore-compat.js"]) {
+    let last;
+    for (const host of FB_HOSTS) { try { await loadScript(host + f); last = null; break; } catch (e) { last = e; } }
+    if (last) throw new Error("Could not load the Firebase library (" + f + "). Check your internet connection.");
+  }
+}
+const FB_MSG = {
+  "auth/invalid-credential": "Wrong email or password.", "auth/wrong-password": "Wrong email or password.", "auth/user-not-found": "Wrong email or password.",
+  "auth/invalid-login-credentials": "Wrong email or password.", "auth/invalid-email": "That email address does not look right.",
+  "auth/missing-email": "Type your email.", "auth/missing-password": "Type your password.",
+  "auth/email-already-in-use": "That email already has an account. Use Sign in.", "auth/weak-password": "Choose a password of at least 6 characters.",
+  "auth/too-many-requests": "Too many attempts. Wait a few minutes, or use Forgot password.", "auth/user-disabled": "This account has been disabled.",
+  "auth/admin-restricted-operation": "New accounts are switched off in this Firebase project. Use Sign in with the account you already made.",
+  "auth/operation-not-allowed": "Email/password sign-in is not switched on in the Firebase console (Authentication → Sign-in method).",
+  "auth/network-request-failed": "Could not reach Firebase. Check your internet connection and try again.",
+  "auth/invalid-api-key": "The apiKey in docs/paper-config.js is not valid. Copy it again from the Firebase console.",
+  "permission-denied": "Firebase refused the request. Publish the security rules from paper/firestore.rules (see the README), then reload.",
+  "unavailable": "Could not reach Firebase. Check your internet connection and try again.",
+  "not-found": "The Firestore database has not been created yet (Firebase console → Firestore Database → Create database).",
+};
+const errMsg = e => (e && FB_MSG[e.code]) || (e && e.message) || String(e);
+
+async function firebaseStore() {
+  await loadFirebase();
+  firebase.initializeApp(CFG.firebase);
+  const auth = firebase.auth(), db = firebase.firestore();
+  const restored = new Promise(res => { const off = auth.onAuthStateChanged(u => { off(); res(u); }); });   // your saved session, or null
+  const uid = () => { if (!auth.currentUser) throw new Error("You are signed out. Reload the page and sign in."); return auth.currentUser.uid; };
+  const col = t => db.collection("users").doc(uid()).collection(t);
+  const clean = o => JSON.parse(JSON.stringify(o));      // Firestore rejects undefined values
+  const withId = d => ({ id: d.id, ...d.data() });
   return {
-    mode: "cloud", sb,
-    async list(t) { const out = []; for (let i = 0; ; i += 1000) { const d = ck(await sb.from(T(t)).select("*").range(i, i + 999)); out.push(...d); if (d.length < 1000) return out; } },
-    async insert(t, row) { return ck(await sb.from(T(t)).insert(row).select().single()); },
-    async update(t, id, patch) { return ck(await sb.from(T(t)).update(patch).eq("id", id).select().single()); },
-    async remove(t, id) { ck(await sb.from(T(t)).delete().eq("id", id)); },
-    async getSettings() { const d = ck(await sb.from("paper_settings").select("data").maybeSingle()); return d ? d.data : {}; },
-    async saveSettings(v) { const u = (await sb.auth.getUser()).data.user; ck(await sb.from("paper_settings").upsert({ user_id: u.id, data: v, updated_at: new Date().toISOString() })); },
+    mode: "cloud",
+    restore: () => restored,
+    email: () => (auth.currentUser ? auth.currentUser.email : ""),
+    async signIn(e, p) { await auth.signInWithEmailAndPassword(e, p); },
+    async signUp(e, p) { await auth.createUserWithEmailAndPassword(e, p); },
+    async reset(e) { await auth.sendPasswordResetEmail(e); },
+    async signOut() { await auth.signOut(); },
+    onSignedOut(cb) { let had = false; auth.onAuthStateChanged(u => { if (u) had = true; else if (had) { had = false; cb(); } }); },
+    async list(t) {
+      const snap = await col(t).get();
+      if (t !== "prices") return snap.docs.map(withId);
+      const out = [];                                      // one document per ticker holds its dates and closes
+      for (const d of snap.docs) { const x = d.data(), yf = x.yf || d.id; (x.dates || []).forEach((date, i) => out.push({ yf, date, close: x.closes[i] })); }
+      return out;
+    },
+    async insert(t, row) { const r = clean({ created_at: new Date().toISOString(), ...row }); const ref = await col(t).add(r); return { id: ref.id, ...r }; },
+    async update(t, id, patch) { const ref = col(t).doc(id); await ref.update(clean(patch)); return withId(await ref.get()); },
+    async remove(t, id) { await col(t).doc(id).delete(); },
+    async getSettings() { const d = await col("settings").doc("main").get(); return d.exists ? (d.data().data || {}) : {}; },
+    async saveSettings(v) { await col("settings").doc("main").set({ data: clean(v), updated_at: new Date().toISOString() }); },
   };
 }
 
 /* -------------------------------------------------------------------- boot -- */
 async function boot() {
   try {
-    if (!CFG.supabaseUrl || !CFG.supabaseAnonKey) {
+    const fb = CFG.firebase || {};
+    if (!fb.apiKey || !fb.projectId) {
       STORE = localStore();
-      banner("Demo mode: your data is saved only in this browser and will not sync to other devices. To sync, connect Supabase (see the README, section &ldquo;Paper trading&rdquo;).");
+      banner("Demo mode: your data is saved only in this browser and will not sync to other devices, and orders are never filled. To sync, connect Firebase (see the README, section &ldquo;Paper trading&rdquo;).");
       return start();
     }
-    STORE = await cloudStore();
-    const { data } = await STORE.sb.auth.getSession();
-    STORE.sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") showAuth(); });
-    if (data.session) start(); else showAuth();
-  } catch (e) { banner("Could not start: " + esc(netHint(e.message)), true); }
+    STORE = await firebaseStore();
+    STORE.onSignedOut(showAuth);
+    if (await STORE.restore()) start(); else showAuth();
+  } catch (e) { banner("Could not start: " + esc(errMsg(e)), true); }
 }
-const BLOCK_HINT = " The page could not reach Supabase. Since February 2026 some Indian internet providers (Jio, Airtel, ACT) block supabase.co. Try mobile data or another network, or set up the free relay described in the README under \u201cIf Supabase is blocked\u201d.";
-const netHint = m => { m = String(m || ""); return /fetch|network|load failed|timed? ?out/i.test(m) ? m + BLOCK_HINT : m; };
 function showAuth() {
   $("app").hidden = true; $("auth").hidden = false; $("who").textContent = "";
-  const msg = (t, ok) => { $("a-msg").style.color = ok ? "var(--up)" : ""; $("a-msg").textContent = ok ? t : netHint(t); };
+  const msg = (t, ok) => { $("a-msg").style.color = ok ? "var(--up)" : ""; $("a-msg").textContent = t; };
   const cred = () => ({ email: $("a-email").value.trim(), password: $("a-pass").value });
-  $("a-in").onclick = async () => { try { const r = await STORE.sb.auth.signInWithPassword(cred()); if (r.error) msg(r.error.message); else { $("auth").hidden = true; start(); } } catch (e) { msg(e.message); } };
-  $("a-up").onclick = async () => {
-    const r = await STORE.sb.auth.signUp({ ...cred(), options: { emailRedirectTo: location.origin + location.pathname } });   // the confirmation link comes back to this page
-    if (r.error) return msg(r.error.message);
-    if (r.data.session) { $("auth").hidden = true; start(); } else msg("Account created. Check your email to confirm it, then sign in.", true);
-  };
+  const go = fn => async () => { try { const c = cred(); await fn(c); $("auth").hidden = true; start(); } catch (e) { msg(errMsg(e)); } };
+  $("a-in").onclick = go(c => STORE.signIn(c.email, c.password));
+  $("a-up").onclick = go(c => STORE.signUp(c.email, c.password));
   $("a-reset").onclick = async () => {
     const e = $("a-email").value.trim(); if (!e) return msg("Type your email first.");
-    const r = await STORE.sb.auth.resetPasswordForEmail(e, { redirectTo: location.href.split("?")[0] });
-    msg(r.error ? r.error.message : "Password reset email sent.", !r.error);
+    try { await STORE.reset(e); msg("If that email has an account, a password reset link is on its way.", true); } catch (x) { msg(errMsg(x)); }
   };
 }
 async function start() {
   $("auth").hidden = true; $("app").hidden = false;
   if (STORE.mode === "cloud") {
-    const u = (await STORE.sb.auth.getUser()).data.user;
-    $("who").innerHTML = esc(u ? u.email : "") + ' &middot; <a href="#" id="signout">Sign out</a>';
-    $("signout").onclick = async e => { e.preventDefault(); await STORE.sb.auth.signOut(); };
+    $("who").innerHTML = esc(STORE.email()) + ' &middot; <a href="#" id="signout">Sign out</a>';
+    $("signout").onclick = async e => { e.preventDefault(); await STORE.signOut(); };
   }
   await Promise.all([reload(), fetch("version.json", { cache: "no-store" }).then(r => r.json()).then(v => SESS = v.sessions || {}).catch(() => {}),
                      fetch("fx.json", { cache: "no-store" }).then(r => r.json()).then(v => FX = v).catch(() => {})]);
@@ -222,7 +261,7 @@ async function reload() {
     PM = {};
     for (const p of prices) (PM[p.yf] = PM[p.yf] || []).push({ date: p.date, close: +p.close });
     for (const k in PM) PM[k].sort((a, b) => (a.date < b.date ? -1 : 1));
-  } catch (e) { banner("Could not load your data: " + esc(netHint(e.message)), true); }
+  } catch (e) { banner("Could not load your data: " + esc(errMsg(e)), true); }
 }
 function buildTabs() {
   $("mk").innerHTML = Object.keys(MKT).map(k => `<button class="tab" role="tab" data-act="mkt" data-v="${k}">${MKT[k].name}</button>`).join("");

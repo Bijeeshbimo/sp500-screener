@@ -99,32 +99,25 @@ A practice account that lives beside the screener: add (pretend) funds, place or
 - **Editing:** any executed order can be corrected; positions, P&L and the dashboard recalculate from the records.
 - **Dashboard:** equity curve against your deposits, deposit-adjusted return vs Nifty 50 / S&P 500, win rate, profit factor, expectancy, R-multiples, holding times, drawdown, results by tag, and plain-language observations.
 
-### One-time setup (about 10 minutes)
+### One-time setup (about 15 minutes, free, no card)
 
-1. **Supabase** (free): create a project, then **SQL Editor → New query**, paste all of `paper/schema.sql` and press **Run**.
-2. **Connect the page:** put the Project URL and the *publishable* (anon) key in `docs/paper-config.js`. These are meant to be public; your data is protected by your login and row-level security. Never put the `service_role` key in the repo.
-3. **Let the daily job fill orders:** in GitHub go to **Settings → Secrets and variables → Actions → New repository secret** and add `SUPABASE_URL` (the same URL) and `SUPABASE_SERVICE_KEY` (the `service_role` / secret key from Supabase → Project Settings → API). Without these the page still works, but orders are never filled.
-4. Open `paper.html`, press **Create account**, and sign in. In Supabase → Authentication → URL Configuration, set **Site URL** to your page's address (the one ending in `/paper.html`'s folder, e.g. `https://YOURNAME.github.io/sp500-screener/`) and add the same address under **Redirect URLs**; otherwise confirmation emails link to `localhost:3000`, which does not exist. If you want to skip the confirmation email, turn off **Confirm email** under Supabase → Authentication → Sign In / Providers → Email. Afterwards, consider turning off **Allow new users to sign up** so nobody else can register.
+Your data is kept in **Firebase** (Google), which works on every Indian network. Until you do this the page runs in **demo mode**: data stays in that one browser and orders are never filled.
 
-Until step 2 is done the page runs in **demo mode**: everything is saved in that browser only.
+1. **Create the project.** Go to console.firebase.google.com, **Add project**, give it a name (for example `paper-trading`), and switch Google Analytics off.
+2. **Switch on sign-in.** **Build → Authentication → Get started → Email/Password → Enable → Save.**
+3. **Create the database.** **Build → Firestore Database → Create database.** Pick a location near you (for example `asia-south1`, Mumbai; it cannot be changed later) and **Start in production mode**.
+4. **Publish the rules.** In Firestore open the **Rules** tab, replace everything with the contents of `paper/firestore.rules`, and press **Publish**. They let a signed-in user read and write only their own folder.
+5. **Connect the page.** **Project settings (gear icon) → General → Your apps → the `</>` web icon**, register an app (skip Firebase Hosting), and copy the `apiKey`, `authDomain`, `projectId` and `appId` values into `docs/paper-config.js`. These are meant to be public; the rules and your login protect the data.
+6. **Let the daily job fill orders.** **Project settings → Service accounts → Generate new private key** downloads a JSON file. In GitHub go to **Settings → Secrets and variables → Actions → New repository secret**, name it `FIREBASE_SERVICE_ACCOUNT`, and paste the **entire contents** of the file. Never commit that file or paste it anywhere else.
+7. **Create your account.** Open `paper.html`, press **Create account**, and sign in. Then go to **Authentication → Settings → User actions** and untick **Enable create (sign-up)** so nobody else can register.
 
-The order engine (`paper/engine.py`) runs in the same daily workflow right after the screener. It uses only completed daily bars, never fills an order twice, and its failure cannot stop the screener.
+The order engine (`paper/engine.py`) runs in the same daily workflow right after the screener. It uses only completed daily bars, never fills an order twice (each automatic fill has a fixed id), and its failure cannot stop the screener. Run the workflow by hand from the **Actions** tab to test it.
 
-### If Supabase is blocked on your internet provider
+**Free limits:** Firebase's free plan allows 50,000 reads and 20,000 writes a day and 1 GiB of data, far more than this needs.
 
-Since February 2026 several Indian providers (Jio, Airtel, ACT) block `supabase.co`. The symptom is **"NetworkError when attempting to fetch resource"** when you sign in. To check, open `https://<your-project>.supabase.co/auth/v1/health` in the same browser: a short message such as *No API key found* means it is reachable; a page that never loads means it is blocked. The Supabase dashboard (`supabase.com`) is not affected, and neither is the daily job, because GitHub's servers are not behind these providers.
+**If something does not work:** the page turns Firebase's error codes into plain sentences. "Firebase refused the request" means the rules in step 4 are not published; "database has not been created" means step 3; "Email/password sign-in is not switched on" means step 2.
 
-Fix: a free relay on Cloudflare that only forwards your own sign-in and table requests (`paper/cloudflare-worker.js`).
-
-1. Sign up at cloudflare.com (free), then **Workers & Pages → Create → Create Worker**, name it (for example `paper-relay`), **Deploy**, then **Edit code**.
-2. Replace everything with the contents of `paper/cloudflare-worker.js` and **Deploy**. Check the two lines at the top (your Supabase URL and `https://<you>.github.io`).
-3. Copy the worker's address (`https://paper-relay.<name>.workers.dev`) into `supabaseUrl` in `docs/paper-config.js`. Keep the same publishable key.
-4. Leave the GitHub secret `SUPABASE_URL` as the original `supabase.co` address.
-5. The confirmation email's link points at `supabase.co` and will not open on a blocked network. Create your user in the dashboard instead: **Authentication → Users → Add user**, tick **Auto Confirm User**.
-
-Test it with `node paper/test_worker.mjs`. Quick but per-device alternatives: switch to mobile data or another network, or change DNS to `1.1.1.1`.
-
-**Tests:** `python3 paper/test_paper.py` (fees, fills, brackets, gaps) and `node paper/test_core.js` (funds maths, positions, P&L, insights).
+**Tests:** `python3 paper/test_paper.py` (fees, fills, brackets, gaps, a full engine run on a fake database; `pip install firebase-admin` first to include the database-adapter checks) and `node paper/test_core.js` (funds maths, positions, P&L, insights).
 
 ---
 
@@ -173,10 +166,10 @@ docs/version.json            tiny file the page checks for "new data"
 docs/earnings_cache.json     remembered earnings dates, so runs stay fast
 docs/paper.html              the paper-trading page (hand-written, not overwritten by the script)
 docs/paper-core.js           its calculations (funds, fees, positions, stats)
-docs/paper-config.js         your Supabase URL + publishable key
+docs/paper-config.js         your Firebase web-app values (public)
 docs/fx.json                 latest USD/INR, written by the daily job
-paper/schema.sql             database tables to paste into Supabase
-paper/cloudflare-worker.js   optional relay for networks that block supabase.co
+paper/firestore.rules        security rules to publish in Firebase
+paper/requirements.txt       the engine's one extra package (firebase-admin)
 paper/engine.py, fees.py     the daily order engine and the Dhan charges
 paper/test_*.py, test_core.js  tests
 ```

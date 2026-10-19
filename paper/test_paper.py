@@ -1,13 +1,15 @@
 """Run:  python3 paper/test_paper.py     (no network, no extra packages)"""
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from engine import account_state, simulate, trigger_price  # noqa: E402
+from engine import FirestoreStore, account_state, run_user, simulate, trigger_price  # noqa: E402
 from fees import merged_settings, trade_fees  # noqa: E402
 
 S = merged_settings({})
@@ -145,6 +147,154 @@ class Simulation(unittest.TestCase):
                  {"portfolio": "IN", "symbol": "ABC", "side": "SELL", "qty": 1, "price": 110, "fees_total": 15, "date": "d2", "fees": {"dp": 14.75}}]
         cash, hold, dp = account_state("IN", ledger, fills)
         self.assertEqual((cash, hold["ABC"], dp), (1000 - 201 + 95, 1, {("ABC", "d2")}))
+
+
+class FakeStore:
+    """In-memory stand-in for FirestoreStore (same methods)."""
+
+    def __init__(self):
+        self.d = {}
+
+    def put(self, uid, name, key, row):
+        self.d.setdefault((uid, name), {})[key] = copy.deepcopy(row)
+
+    def users(self):
+        return ["u1"]
+
+    def rows(self, uid, name):
+        return [{"id": k, **copy.deepcopy(v)} for k, v in self.d.get((uid, name), {}).items()]
+
+    def settings(self, uid):
+        return self.d.get((uid, "settings"), {}).get("main", {}).get("data", {})
+
+    def create_fill(self, uid, order_id, row):
+        coll = self.d.setdefault((uid, "fills"), {})
+        if f"auto-{order_id}" in coll:
+            return False
+        coll[f"auto-{order_id}"] = copy.deepcopy(row)
+        return True
+
+    def patch_order(self, uid, oid, patch):
+        self.d[(uid, "orders")][oid].update(patch)
+
+    def put_prices(self, uid, yf, dates, closes):
+        self.put(uid, "prices", yf, {"yf": yf, "dates": dates, "closes": closes})
+
+
+def stub_fetch(days):
+    """fetch(yfs, start) returning the given sessions for ABC.NS and a benchmark."""
+    def fetch(yfs, start):
+        out = {"ABC.NS": [bar(*d) for d in days], "^NSEI": [bar(d[0], 100, 100, 100, 100) for d in days]}
+        return {y: out[y] for y in yfs if y in out}
+    return fetch
+
+
+class EngineRun(unittest.TestCase):
+    def setUp(self):
+        self.st = FakeStore()
+        self.st.put("u1", "ledger", "l1", {"portfolio": "IN", "kind": "deposit", "date": "2026-10-01", "amount": 100000.0, "inr": 100000.0})
+        self.st.put("u1", "orders", "o1", order("o1", stop_ref=95))
+        self.st.put("u1", "orders", "o2", order("o2", side="SELL", type="STOP", price=95, status="waiting", parent_id="o1", oco_group="g"))
+        self.st.put("u1", "orders", "o3", order("o3", side="SELL", type="LIMIT", price=110, status="waiting", parent_id="o1", oco_group="g"))
+        for k in ("o1", "o2", "o3"):
+            self.st.d[("u1", "orders")][k].pop("id", None)
+
+    def status(self, oid):
+        return self.st.d[("u1", "orders")][oid]["status"]
+
+    def test_full_lifecycle_over_several_daily_runs(self):
+        day1 = [("2026-10-02", 100, 102, 99, 101)]
+        r = run_user(self.st, "u1", stub_fetch(day1))
+        self.assertEqual((r["fills"], self.status("o1"), self.status("o2"), self.status("o3")), (1, "filled", "pending", "pending"))
+        fill = self.st.d[("u1", "fills")]["auto-o1"]
+        self.assertEqual((fill["price"], fill["source"], fill["order_id"]), (100, "auto", "o1"))
+        self.assertTrue(fill["created_at"])
+        # prices stored as one document per ticker, whole window
+        self.assertEqual(self.st.d[("u1", "prices")]["ABC.NS"]["dates"], ["2026-10-02"])
+        self.assertIn("^NSEI", self.st.d[("u1", "prices")])
+
+        again = run_user(self.st, "u1", stub_fetch(day1))                      # same data again: nothing changes
+        self.assertEqual((again["fills"], len(self.st.d[("u1", "fills")])), (0, 1))
+
+        day2 = day1 + [("2026-10-03", 100, 112, 94, 100)]                       # touches both stop and target
+        r = run_user(self.st, "u1", stub_fetch(day2))
+        self.assertEqual(r["fills"], 1)
+        sell = self.st.d[("u1", "fills")]["auto-o2"]
+        self.assertEqual((sell["side"], sell["price"], sell["date"]), ("SELL", 95, "2026-10-03"))
+        self.assertEqual((self.status("o2"), self.status("o3")), ("filled", "cancelled"))
+        self.assertEqual(self.st.d[("u1", "prices")]["ABC.NS"]["closes"], [101, 100])
+        self.assertEqual(run_user(self.st, "u1", stub_fetch(day2))["fills"], 0)  # everything settled: no work
+
+    def test_children_are_repaired_if_a_run_stopped_after_the_fill_was_saved(self):
+        self.st.create_fill("u1", "o1", {"order_id": "o1", "portfolio": "IN", "symbol": "ABC", "yf": "ABC.NS", "side": "BUY", "qty": 10,
+                                         "price": 100, "date": "2026-10-02", "fees": {"total": 0}, "fees_total": 0, "source": "auto"})
+        self.st.d[("u1", "orders")]["o1"]["status"] = "filled"                 # parent settled, children still 'waiting'
+        run_user(self.st, "u1", stub_fetch([("2026-10-02", 100, 102, 99, 101)]))
+        self.assertEqual((self.status("o2"), self.st.d[("u1", "orders")]["o2"]["after_date"]), ("pending", "2026-10-02"))
+
+    def test_children_cancelled_when_the_entry_never_filled(self):
+        self.st.d[("u1", "orders")]["o1"]["status"] = "cancelled"
+        run_user(self.st, "u1", stub_fetch([("2026-10-02", 100, 102, 99, 101)]))
+        self.assertEqual((self.status("o2"), self.status("o3")), ("cancelled", "cancelled"))
+
+    def test_unknown_ticker_is_flagged_not_crashed(self):
+        run_user(self.st, "u1", lambda yfs, start: {})
+        self.assertIn("no price data", self.st.d[("u1", "orders")]["o1"]["status_note"])
+        self.assertEqual(self.status("o1"), "pending")
+
+    def test_user_with_no_records_is_skipped(self):
+        empty = FakeStore()
+        self.assertEqual(run_user(empty, "u1", stub_fetch([]))["fills"], 0)
+
+    def test_user_settings_are_applied(self):
+        self.st.put("u1", "settings", "main", {"data": {"in": {"slippage_bps": 100}}})
+        run_user(self.st, "u1", stub_fetch([("2026-10-02", 100, 102, 99, 101)]))
+        self.assertEqual(self.st.d[("u1", "fills")]["auto-o1"]["price"], 101.0)   # 1% slippage on a market buy at 100
+
+
+class FirestoreAdapter(unittest.TestCase):
+    """Checks the calls FirestoreStore makes, against a mock of the Firestore client (needs firebase-admin installed)."""
+
+    def setUp(self):
+        try:
+            import firebase_admin  # noqa: F401
+            from google.api_core.exceptions import AlreadyExists  # noqa: F401
+        except ImportError:
+            self.skipTest("firebase-admin not installed")
+        self.db = mock.MagicMock()
+        with mock.patch("firebase_admin.initialize_app"), mock.patch("firebase_admin.credentials.Certificate") as cert, \
+                mock.patch("firebase_admin.firestore.client", return_value=self.db):
+            self.store = FirestoreStore('{"type": "service_account"}')
+            cert.assert_called_once_with({"type": "service_account"})
+
+    def test_paths_and_documents(self):
+        self.db.collection.return_value.list_documents.return_value = [mock.Mock(id="zed"), mock.Mock(id="abc")]
+        self.assertEqual(self.store.users(), ["abc", "zed"])
+        self.db.collection.assert_called_with("users")
+        doc = mock.Mock(id="o1"); doc.to_dict.return_value = {"status": "pending"}
+        self.db.collection.return_value.stream.return_value = [doc]
+        self.assertEqual(self.store.rows("u1", "orders"), [{"id": "o1", "status": "pending"}])
+        self.db.collection.assert_called_with("users/u1/orders")
+        self.store.patch_order("u1", "o1", {"status": "filled"})
+        self.db.document.assert_called_with("users/u1/orders/o1"); self.db.document.return_value.update.assert_called_with({"status": "filled"})
+        self.store.put_prices("u1", "^NSEI", ["2026-10-02"], [1.5])
+        self.db.document.assert_called_with("users/u1/prices/^NSEI")
+        self.db.document.return_value.set.assert_called_with({"yf": "^NSEI", "dates": ["2026-10-02"], "closes": [1.5]})
+
+    def test_settings_present_and_absent(self):
+        snap = mock.Mock(exists=True); snap.to_dict.return_value = {"data": {"us": {"min_brokerage": 0.02}}}
+        self.db.document.return_value.get.return_value = snap
+        self.assertEqual(self.store.settings("u1"), {"us": {"min_brokerage": 0.02}})
+        self.db.document.assert_called_with("users/u1/settings/main")
+        self.db.document.return_value.get.return_value = mock.Mock(exists=False)
+        self.assertEqual(self.store.settings("u1"), {})
+
+    def test_create_fill_uses_a_fixed_id_and_reports_duplicates(self):
+        from google.api_core.exceptions import AlreadyExists
+        self.assertTrue(self.store.create_fill("u1", "o9", {"x": 1}))
+        self.db.document.assert_called_with("users/u1/fills/auto-o9"); self.db.document.return_value.create.assert_called_with({"x": 1})
+        self.db.document.return_value.create.side_effect = AlreadyExists("exists")
+        self.assertFalse(self.store.create_fill("u1", "o9", {"x": 1}))
 
 
 if __name__ == "__main__":

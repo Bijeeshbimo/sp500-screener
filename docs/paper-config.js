@@ -1,11 +1,14 @@
 // Paper trading connection settings.
-// Leave both values empty to run in DEMO mode (everything is saved only in this browser, no login).
-// To sync across devices: create a free Supabase project, run paper/schema.sql in its SQL editor, then paste
-//   Project Settings -> API -> Project URL            into supabaseUrl
-//   Project Settings -> API -> anon / public key      into supabaseAnonKey
-// The anon key is meant to be public: your data is protected by your login and row-level security.
-// NEVER put the service_role key here.
+// Leave these empty to run in DEMO mode (data saved only in this browser, no login, orders never fill).
+// To sync across devices, create a free Firebase project (see README, "Paper trading") and paste the
+// values Firebase shows for your web app: Project settings -> General -> Your apps -> SDK setup and configuration.
+// These values are meant to be public. Your data is protected by your login and the Firestore security rules.
+// NEVER put a service-account key here.
 window.PAPER_CONFIG = {
-  supabaseUrl: "https://qrnsadytlpqztljigqfx.supabase.co",
-  supabaseAnonKey: "sb_publishable_4VHIMtGf4bblYYc7-Y5Aog_rkASFSKx",
+  firebase: {
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    appId: "",
+  },
 };
