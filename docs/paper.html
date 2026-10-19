@@ -519,7 +519,7 @@ function orderDialog(pref) {
       <label>Fill from sessions after<input name="after" type="date" value="${lastSession()}"></label>
       <label>Expires (optional)<input name="expiry" type="date"></label>
       <label>Tag (optional)<input name="tag" list="taglist" value="${esc(pref.tag || "")}"><datalist id="taglist">${[...new Set(S.fills.concat(S.orders).map(x => x.tag).filter(Boolean))].map(t => `<option value="${esc(t)}">`).join("")}</datalist></label></div>
-    <div id="buyonly"><div class="grid"><label>Planned stop (for R-multiples)<input name="stopref" type="number" step="any" value="${pref.stop || ""}"></label>
+    <div id="buyonly"><div class="grid"><label>Planned stop (for R-multiples; follows the bracket stop-loss)<input name="stopref" type="number" step="any" value="${pref.stop || ""}"></label>
       <label>Bracket: stop-loss price<input name="bstop" type="number" step="any" placeholder="optional"></label>
       <label>Bracket: target price<input name="btgt" type="number" step="any" placeholder="optional"></label></div></div>
     <label>Note<input name="note" value="${esc(pref.note || "")}"></label>
@@ -533,6 +533,10 @@ function orderDialog(pref) {
     $("est").innerHTML = t;
   };
   f.addEventListener("input", sync); f.addEventListener("change", sync);
+  // the planned stop follows the bracket stop-loss until you type your own planned stop
+  let stopTouched = false;
+  f.elements.stopref.addEventListener("input", () => { stopTouched = true; });
+  f.elements.bstop.addEventListener("input", () => { if (!stopTouched) f.elements.stopref.value = f.elements.bstop.value; });
   f.elements.sym.addEventListener("focus", async () => { const L = await symbolList(); $("symlist").innerHTML = L.map(s => `<option value="${esc(s.sym)}">${esc(s.name)}</option>`).join(""); sync(); }, { once: true });
   if (pref.side) f.elements.side.value = pref.side; if (pref.qty) f.elements.qty.value = pref.qty; if (pref.type) f.elements.type.value = pref.type;
   if (pref.sym && !SYMS[M]) symbolList().then(sync);
@@ -553,7 +557,7 @@ function orderDialog(pref) {
     }
     const base = { portfolio: M, symbol: sym, yf: toYf(sym, M), qty, after_date: val(f, "after"), expiry: val(f, "expiry") || null, tag: val(f, "tag") || null, note: val(f, "note") || null };
     await guard(f, async () => {
-      const parent = await STORE.insert("orders", { ...base, side, type, price: type === "MARKET" ? null : price, oco_group: null, parent_id: null, stop_ref: side === "BUY" ? nval(f, "stopref") : null, status: "pending" });
+      const parent = await STORE.insert("orders", { ...base, side, type, price: type === "MARKET" ? null : price, oco_group: null, parent_id: null, stop_ref: side === "BUY" ? (nval(f, "stopref") ?? bstop) : null, status: "pending" });
       const g = bstop != null && btgt != null ? uuid() : null;
       if (bstop != null) await STORE.insert("orders", { ...base, side: "SELL", type: "STOP", price: bstop, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
       if (btgt != null) await STORE.insert("orders", { ...base, side: "SELL", type: "LIMIT", price: btgt, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
