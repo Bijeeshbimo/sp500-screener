@@ -104,8 +104,8 @@ A practice account that lives beside the screener: add (pretend) funds, place or
 Your data is kept in **Firebase** (Google), which works on every Indian network. Until you do this the page runs in **demo mode**: data stays in that one browser and orders are never filled.
 
 1. **Create the project.** Go to console.firebase.google.com, **Add project**, give it a name (for example `paper-trading`), and switch Google Analytics off.
-2. **Switch on sign-in.** **Build → Authentication → Get started → Email/Password → Enable → Save.**
-3. **Create the database.** **Build → Firestore Database → Create database.** Pick a location near you (for example `asia-south1`, Mumbai; it cannot be changed later) and **Start in production mode**.
+2. **Switch on sign-in.** **Security → Authentication → Get started → Email/Password → Enable → Save.**
+3. **Create the database.** **Databases & Storage → Firestore → Create database.** Pick a location near you (for example `asia-south1`, Mumbai; it cannot be changed later) and **Start in production mode**.
 4. **Publish the rules.** In Firestore open the **Rules** tab, replace everything with the contents of `paper/firestore.rules`, and press **Publish**. They let a signed-in user read and write only their own folder.
 5. **Connect the page.** **Project settings (gear icon) → General → Your apps → the `</>` web icon**, register an app (skip Firebase Hosting), and copy the `apiKey`, `authDomain`, `projectId` and `appId` values into `docs/paper-config.js`. These are meant to be public; the rules and your login protect the data.
 6. **Let the daily job fill orders.** **Project settings → Service accounts → Generate new private key** downloads a JSON file. In GitHub go to **Settings → Secrets and variables → Actions → New repository secret**, name it `FIREBASE_SERVICE_ACCOUNT`, and paste the **entire contents** of the file. Never commit that file or paste it anywhere else.
