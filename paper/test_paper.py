@@ -30,9 +30,9 @@ def order(i, **kw):
 class Fees(unittest.TestCase):
     def test_us_brokerage_rounds_up_to_the_cent(self):
         # reported on the ValuePickr forum: a $25 order attracted $0.07
-        self.assertEqual(trade_fees("US", "BUY", 1, 25, S)["total"], 0.07)
+        self.assertEqual(trade_fees("US", "BUY", 1, 25, S)["brokerage"], 0.07)
         self.assertEqual(trade_fees("US", "SELL", 0.001, 1, S)["total"], 0.01)      # minimum $0.01
-        self.assertEqual(trade_fees("US", "BUY", 100, 150, S)["total"], 37.5)
+        self.assertEqual(trade_fees("US", "BUY", 100, 150, S)["total"], 45.0)
 
     def test_india_delivery_buy_and_sell(self):
         b = trade_fees("IN", "BUY", 100, 500, S)

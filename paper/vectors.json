@@ -13,6 +13,8 @@
   "us": {
    "brokerage_pct": 0.25,
    "min_brokerage": 0.01,
+   "exch_pct": 0.005,
+   "gst_pct": 18.0,
    "other_pct": 0.0,
    "slippage_bps": 0.0
   },
@@ -40,8 +42,10 @@
    "dp": false,
    "fees": {
     "brokerage": 22.29,
+    "exchange": 0.45,
+    "gst": 4.01,
     "other": 0.0,
-    "total": 22.29
+    "total": 26.75
    }
   },
   {
@@ -103,8 +107,10 @@
    "dp": false,
    "fees": {
     "brokerage": 52.73,
+    "exchange": 1.05,
+    "gst": 9.49,
     "other": 0.0,
-    "total": 52.73
+    "total": 63.27
    }
   },
   {
@@ -115,8 +121,10 @@
    "dp": true,
    "fees": {
     "brokerage": 357.13,
+    "exchange": 7.14,
+    "gst": 64.28,
     "other": 0.0,
-    "total": 357.13
+    "total": 428.55
    }
   },
   {
@@ -161,8 +169,10 @@
    "dp": true,
    "fees": {
     "brokerage": 307.47,
+    "exchange": 6.15,
+    "gst": 55.34,
     "other": 0.0,
-    "total": 307.47
+    "total": 368.96
    }
   },
   {
@@ -190,8 +200,10 @@
    "dp": true,
    "fees": {
     "brokerage": 1.57,
+    "exchange": 0.03,
+    "gst": 0.28,
     "other": 0.0,
-    "total": 1.57
+    "total": 1.88
    }
   },
   {
@@ -202,8 +214,10 @@
    "dp": false,
    "fees": {
     "brokerage": 453.65,
+    "exchange": 9.07,
+    "gst": 81.66,
     "other": 0.0,
-    "total": 453.65
+    "total": 544.38
    }
   },
   {
@@ -214,8 +228,10 @@
    "dp": true,
    "fees": {
     "brokerage": 397.79,
+    "exchange": 7.96,
+    "gst": 71.6,
     "other": 0.0,
-    "total": 397.79
+    "total": 477.35
    }
   },
   {
@@ -226,8 +242,10 @@
    "dp": false,
    "fees": {
     "brokerage": 1.98,
+    "exchange": 0.04,
+    "gst": 0.36,
     "other": 0.0,
-    "total": 1.98
+    "total": 2.38
    }
   },
   {
@@ -238,8 +256,10 @@
    "dp": false,
    "fees": {
     "brokerage": 1.0,
+    "exchange": 0.02,
+    "gst": 0.18,
     "other": 0.0,
-    "total": 1.0
+    "total": 1.2
    }
   },
   {
@@ -318,8 +338,10 @@
    "dp": true,
    "fees": {
     "brokerage": 168.1,
+    "exchange": 3.36,
+    "gst": 30.26,
     "other": 0.0,
-    "total": 168.1
+    "total": 201.72
    }
   },
   {
@@ -347,8 +369,10 @@
    "dp": true,
    "fees": {
     "brokerage": 0.16,
+    "exchange": 0.0,
+    "gst": 0.03,
     "other": 0.0,
-    "total": 0.16
+    "total": 0.19
    }
   },
   {
@@ -376,8 +400,10 @@
    "dp": true,
    "fees": {
     "brokerage": 219.79,
+    "exchange": 4.4,
+    "gst": 39.56,
     "other": 0.0,
-    "total": 219.79
+    "total": 263.75
    }
   },
   {
@@ -422,8 +448,10 @@
    "dp": false,
    "fees": {
     "brokerage": 17.43,
+    "exchange": 0.35,
+    "gst": 3.14,
     "other": 0.0,
-    "total": 17.43
+    "total": 20.92
    }
   },
   {
@@ -434,8 +462,10 @@
    "dp": false,
    "fees": {
     "brokerage": 18.17,
+    "exchange": 0.36,
+    "gst": 3.27,
     "other": 0.0,
-    "total": 18.17
+    "total": 21.8
    }
   },
   {
@@ -446,8 +476,10 @@
    "dp": false,
    "fees": {
     "brokerage": 2.97,
+    "exchange": 0.06,
+    "gst": 0.53,
     "other": 0.0,
-    "total": 2.97
+    "total": 3.56
    }
   },
   {
@@ -492,8 +524,10 @@
    "dp": true,
    "fees": {
     "brokerage": 31.59,
+    "exchange": 0.63,
+    "gst": 5.69,
     "other": 0.0,
-    "total": 31.59
+    "total": 37.91
    }
   },
   {
@@ -538,8 +572,10 @@
    "dp": false,
    "fees": {
     "brokerage": 5.27,
+    "exchange": 0.11,
+    "gst": 0.95,
     "other": 0.0,
-    "total": 5.27
+    "total": 6.33
    }
   },
   {
@@ -567,8 +603,10 @@
    "dp": true,
    "fees": {
     "brokerage": 10.47,
+    "exchange": 0.21,
+    "gst": 1.88,
     "other": 0.0,
-    "total": 10.47
+    "total": 12.56
    }
   },
   {
@@ -596,8 +634,10 @@
    "dp": false,
    "fees": {
     "brokerage": 1.75,
+    "exchange": 0.03,
+    "gst": 0.32,
     "other": 0.0,
-    "total": 1.75
+    "total": 2.1
    }
   },
   {
@@ -608,8 +648,10 @@
    "dp": true,
    "fees": {
     "brokerage": 143.64,
+    "exchange": 2.87,
+    "gst": 25.86,
     "other": 0.0,
-    "total": 143.64
+    "total": 172.37
    }
   },
   {
@@ -620,8 +662,10 @@
    "dp": true,
    "fees": {
     "brokerage": 18.14,
+    "exchange": 0.36,
+    "gst": 3.27,
     "other": 0.0,
-    "total": 18.14
+    "total": 21.77
    }
   },
   {
@@ -683,8 +727,10 @@
    "dp": false,
    "fees": {
     "brokerage": 1.56,
+    "exchange": 0.03,
+    "gst": 0.28,
     "other": 0.0,
-    "total": 1.56
+    "total": 1.87
    }
   },
   {
@@ -695,8 +741,10 @@
    "dp": true,
    "fees": {
     "brokerage": 12.28,
+    "exchange": 0.25,
+    "gst": 2.21,
     "other": 0.0,
-    "total": 12.28
+    "total": 14.74
    }
   },
   {
@@ -775,8 +823,10 @@
    "dp": false,
    "fees": {
     "brokerage": 357.46,
+    "exchange": 7.15,
+    "gst": 64.34,
     "other": 0.0,
-    "total": 357.46
+    "total": 428.95
    }
   },
   {
@@ -787,8 +837,10 @@
    "dp": true,
    "fees": {
     "brokerage": 16.03,
+    "exchange": 0.32,
+    "gst": 2.89,
     "other": 0.0,
-    "total": 16.03
+    "total": 19.24
    }
   },
   {
@@ -799,8 +851,10 @@
    "dp": true,
    "fees": {
     "brokerage": 189.02,
+    "exchange": 3.78,
+    "gst": 34.02,
     "other": 0.0,
-    "total": 189.02
+    "total": 226.82
    }
   },
   {
@@ -811,8 +865,10 @@
    "dp": false,
    "fees": {
     "brokerage": 75.27,
+    "exchange": 1.51,
+    "gst": 13.55,
     "other": 0.0,
-    "total": 75.27
+    "total": 90.33
    }
   },
   {
@@ -874,8 +930,10 @@
    "dp": true,
    "fees": {
     "brokerage": 0.84,
+    "exchange": 0.02,
+    "gst": 0.15,
     "other": 0.0,
-    "total": 0.84
+    "total": 1.01
    }
   },
   {
@@ -886,8 +944,10 @@
    "dp": true,
    "fees": {
     "brokerage": 7.68,
+    "exchange": 0.15,
+    "gst": 1.38,
     "other": 0.0,
-    "total": 7.68
+    "total": 9.21
    }
   },
   {
@@ -915,8 +975,10 @@
    "dp": false,
    "fees": {
     "brokerage": 8.74,
+    "exchange": 0.17,
+    "gst": 1.57,
     "other": 0.0,
-    "total": 8.74
+    "total": 10.48
    }
   },
   {
@@ -927,8 +989,10 @@
    "dp": true,
    "fees": {
     "brokerage": 3.9,
+    "exchange": 0.08,
+    "gst": 0.7,
     "other": 0.0,
-    "total": 3.9
+    "total": 4.68
    }
   },
   {
@@ -939,8 +1003,10 @@
    "dp": false,
    "fees": {
     "brokerage": 169.21,
+    "exchange": 3.38,
+    "gst": 30.46,
     "other": 0.0,
-    "total": 169.21
+    "total": 203.05
    }
   },
   {
@@ -985,8 +1051,10 @@
    "dp": true,
    "fees": {
     "brokerage": 287.79,
+    "exchange": 5.76,
+    "gst": 51.8,
     "other": 0.0,
-    "total": 287.79
+    "total": 345.35
    }
   },
   {
@@ -1014,8 +1082,10 @@
    "dp": false,
    "fees": {
     "brokerage": 126.92,
+    "exchange": 2.54,
+    "gst": 22.85,
     "other": 0.0,
-    "total": 126.92
+    "total": 152.31
    }
   },
   {
@@ -1026,8 +1096,10 @@
    "dp": false,
    "fees": {
     "brokerage": 42.52,
+    "exchange": 0.85,
+    "gst": 7.65,
     "other": 0.0,
-    "total": 42.52
+    "total": 51.02
    }
   },
   {
@@ -1055,8 +1127,10 @@
    "dp": false,
    "fees": {
     "brokerage": 344.97,
+    "exchange": 6.9,
+    "gst": 62.09,
     "other": 0.0,
-    "total": 344.97
+    "total": 413.96
    }
   },
   {
@@ -1101,8 +1175,10 @@
    "dp": true,
    "fees": {
     "brokerage": 2.26,
+    "exchange": 0.05,
+    "gst": 0.41,
     "other": 0.0,
-    "total": 2.26
+    "total": 2.72
    }
   },
   {
@@ -1113,8 +1189,10 @@
    "dp": false,
    "fees": {
     "brokerage": 83.96,
+    "exchange": 1.68,
+    "gst": 15.11,
     "other": 0.0,
-    "total": 83.96
+    "total": 100.75
    }
   },
   {
@@ -1125,8 +1203,10 @@
    "dp": false,
    "fees": {
     "brokerage": 614.99,
+    "exchange": 12.3,
+    "gst": 110.7,
     "other": 0.0,
-    "total": 614.99
+    "total": 737.99
    }
   },
   {
@@ -1205,8 +1285,10 @@
    "dp": false,
    "fees": {
     "brokerage": 62.42,
+    "exchange": 1.25,
+    "gst": 11.24,
     "other": 0.0,
-    "total": 62.42
+    "total": 74.91
    }
   },
   {
@@ -1217,8 +1299,10 @@
    "dp": true,
    "fees": {
     "brokerage": 0.32,
+    "exchange": 0.01,
+    "gst": 0.06,
     "other": 0.0,
-    "total": 0.32
+    "total": 0.39
    }
   },
   {
@@ -1246,8 +1330,10 @@
    "dp": true,
    "fees": {
     "brokerage": 197.32,
+    "exchange": 3.95,
+    "gst": 35.52,
     "other": 0.0,
-    "total": 197.32
+    "total": 236.79
    }
   },
   {
@@ -1258,8 +1344,10 @@
    "dp": true,
    "fees": {
     "brokerage": 0.45,
+    "exchange": 0.01,
+    "gst": 0.08,
     "other": 0.0,
-    "total": 0.45
+    "total": 0.54
    }
   },
   {
@@ -1270,8 +1358,10 @@
    "dp": true,
    "fees": {
     "brokerage": 247.76,
+    "exchange": 4.96,
+    "gst": 44.6,
     "other": 0.0,
-    "total": 247.76
+    "total": 297.32
    }
   },
   {
@@ -1282,8 +1372,10 @@
    "dp": true,
    "fees": {
     "brokerage": 18.29,
+    "exchange": 0.37,
+    "gst": 3.29,
     "other": 0.0,
-    "total": 18.29
+    "total": 21.95
    }
   },
   {
@@ -1311,8 +1403,10 @@
    "dp": true,
    "fees": {
     "brokerage": 1.06,
+    "exchange": 0.02,
+    "gst": 0.19,
     "other": 0.0,
-    "total": 1.06
+    "total": 1.27
    }
   },
   {
@@ -1323,8 +1417,10 @@
    "dp": true,
    "fees": {
     "brokerage": 14.88,
+    "exchange": 0.3,
+    "gst": 2.68,
     "other": 0.0,
-    "total": 14.88
+    "total": 17.86
    }
   },
   {
@@ -1369,8 +1465,10 @@
    "dp": true,
    "fees": {
     "brokerage": 51.42,
+    "exchange": 1.03,
+    "gst": 9.26,
     "other": 0.0,
-    "total": 51.42
+    "total": 61.71
    }
   },
   {
@@ -1381,8 +1479,10 @@
    "dp": false,
    "fees": {
     "brokerage": 79.01,
+    "exchange": 1.58,
+    "gst": 14.22,
     "other": 0.0,
-    "total": 79.01
+    "total": 94.81
    }
   },
   {
@@ -1427,8 +1527,10 @@
    "dp": true,
    "fees": {
     "brokerage": 11.32,
+    "exchange": 0.23,
+    "gst": 2.04,
     "other": 0.0,
-    "total": 11.32
+    "total": 13.59
    }
   },
   {
@@ -1439,8 +1541,10 @@
    "dp": true,
    "fees": {
     "brokerage": 127.65,
+    "exchange": 2.55,
+    "gst": 22.98,
     "other": 0.0,
-    "total": 127.65
+    "total": 153.18
    }
   },
   {
@@ -1468,8 +1572,10 @@
    "dp": false,
    "fees": {
     "brokerage": 179.26,
+    "exchange": 3.59,
+    "gst": 32.27,
     "other": 0.0,
-    "total": 179.26
+    "total": 215.12
    }
   },
   {
@@ -1514,8 +1620,10 @@
    "dp": true,
    "fees": {
     "brokerage": 407.99,
+    "exchange": 8.16,
+    "gst": 73.44,
     "other": 0.0,
-    "total": 407.99
+    "total": 489.59
    }
   },
   {
@@ -1543,8 +1651,10 @@
    "dp": false,
    "fees": {
     "brokerage": 0.3,
+    "exchange": 0.01,
+    "gst": 0.05,
     "other": 0.0,
-    "total": 0.3
+    "total": 0.36
    }
   },
   {
@@ -1555,8 +1665,10 @@
    "dp": false,
    "fees": {
     "brokerage": 90.25,
+    "exchange": 1.8,
+    "gst": 16.25,
     "other": 0.0,
-    "total": 90.25
+    "total": 108.3
    }
   },
   {
@@ -1567,8 +1679,10 @@
    "dp": true,
    "fees": {
     "brokerage": 0.43,
+    "exchange": 0.01,
+    "gst": 0.08,
     "other": 0.0,
-    "total": 0.43
+    "total": 0.52
    }
   },
   {
@@ -1579,8 +1693,10 @@
    "dp": true,
    "fees": {
     "brokerage": 517.92,
+    "exchange": 10.36,
+    "gst": 93.23,
     "other": 0.0,
-    "total": 517.92
+    "total": 621.51
    }
   },
   {
@@ -1642,8 +1758,10 @@
    "dp": true,
    "fees": {
     "brokerage": 7.64,
+    "exchange": 0.15,
+    "gst": 1.38,
     "other": 0.0,
-    "total": 7.64
+    "total": 9.17
    }
   },
   {
@@ -1671,8 +1789,10 @@
    "dp": true,
    "fees": {
     "brokerage": 155.92,
+    "exchange": 3.12,
+    "gst": 28.07,
     "other": 0.0,
-    "total": 155.92
+    "total": 187.11
    }
   },
   {
@@ -1700,8 +1820,10 @@
    "dp": true,
    "fees": {
     "brokerage": 2.9,
+    "exchange": 0.06,
+    "gst": 0.52,
     "other": 0.0,
-    "total": 2.9
+    "total": 3.48
    }
   },
   {
@@ -1729,8 +1851,10 @@
    "dp": true,
    "fees": {
     "brokerage": 26.11,
+    "exchange": 0.52,
+    "gst": 4.7,
     "other": 0.0,
-    "total": 26.11
+    "total": 31.33
    }
   },
   {
@@ -1758,8 +1882,10 @@
    "dp": false,
    "fees": {
     "brokerage": 35.16,
+    "exchange": 0.7,
+    "gst": 6.33,
     "other": 0.0,
-    "total": 35.16
+    "total": 42.19
    }
   },
   {
@@ -1770,8 +1896,10 @@
    "dp": false,
    "fees": {
     "brokerage": 0.47,
+    "exchange": 0.01,
+    "gst": 0.08,
     "other": 0.0,
-    "total": 0.47
+    "total": 0.56
    }
   },
   {
@@ -1782,8 +1910,10 @@
    "dp": true,
    "fees": {
     "brokerage": 181.51,
+    "exchange": 3.63,
+    "gst": 32.67,
     "other": 0.0,
-    "total": 181.51
+    "total": 217.81
    }
   },
   {
@@ -1862,8 +1992,10 @@
    "dp": true,
    "fees": {
     "brokerage": 67.46,
+    "exchange": 1.35,
+    "gst": 12.14,
     "other": 0.0,
-    "total": 67.46
+    "total": 80.95
    }
   },
   {
@@ -1874,8 +2006,10 @@
    "dp": false,
    "fees": {
     "brokerage": 70.48,
+    "exchange": 1.41,
+    "gst": 12.69,
     "other": 0.0,
-    "total": 70.48
+    "total": 84.58
    }
   },
   {
@@ -1886,8 +2020,10 @@
    "dp": false,
    "fees": {
     "brokerage": 544.09,
+    "exchange": 10.88,
+    "gst": 97.94,
     "other": 0.0,
-    "total": 544.09
+    "total": 652.91
    }
   },
   {
@@ -1898,8 +2034,10 @@
    "dp": true,
    "fees": {
     "brokerage": 160.13,
+    "exchange": 3.2,
+    "gst": 28.82,
     "other": 0.0,
-    "total": 160.13
+    "total": 192.15
    }
   },
   {
@@ -1978,8 +2116,10 @@
    "dp": true,
    "fees": {
     "brokerage": 0.11,
+    "exchange": 0.0,
+    "gst": 0.02,
     "other": 0.0,
-    "total": 0.11
+    "total": 0.13
    }
   },
   {
@@ -1990,8 +2130,10 @@
    "dp": false,
    "fees": {
     "brokerage": 137.61,
+    "exchange": 2.75,
+    "gst": 24.77,
     "other": 0.0,
-    "total": 137.61
+    "total": 165.13
    }
   },
   {
@@ -2002,8 +2144,10 @@
    "dp": true,
    "fees": {
     "brokerage": 3.34,
+    "exchange": 0.07,
+    "gst": 0.6,
     "other": 0.0,
-    "total": 3.34
+    "total": 4.01
    }
   },
   {
@@ -2014,8 +2158,10 @@
    "dp": true,
    "fees": {
     "brokerage": 6.47,
+    "exchange": 0.13,
+    "gst": 1.16,
     "other": 0.0,
-    "total": 6.47
+    "total": 7.76
    }
   },
   {
@@ -2026,8 +2172,10 @@
    "dp": false,
    "fees": {
     "brokerage": 380.14,
+    "exchange": 7.6,
+    "gst": 68.43,
     "other": 0.0,
-    "total": 380.14
+    "total": 456.17
    }
   },
   {
@@ -2055,8 +2203,10 @@
    "dp": false,
    "fees": {
     "brokerage": 3.26,
+    "exchange": 0.07,
+    "gst": 0.59,
     "other": 0.0,
-    "total": 3.26
+    "total": 3.92
    }
   },
   {
@@ -2067,8 +2217,10 @@
    "dp": true,
    "fees": {
     "brokerage": 55.25,
+    "exchange": 1.1,
+    "gst": 9.95,
     "other": 0.0,
-    "total": 55.25
+    "total": 66.3
    }
   },
   {
@@ -2079,8 +2231,10 @@
    "dp": false,
    "fees": {
     "brokerage": 33.93,
+    "exchange": 0.68,
+    "gst": 6.11,
     "other": 0.0,
-    "total": 33.93
+    "total": 40.72
    }
   },
   {
@@ -2125,8 +2279,10 @@
    "dp": false,
    "fees": {
     "brokerage": 231.99,
+    "exchange": 4.64,
+    "gst": 41.76,
     "other": 0.0,
-    "total": 231.99
+    "total": 278.39
    }
   },
   {

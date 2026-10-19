@@ -285,7 +285,7 @@ function render() {
   $("sub").textContent = `${MKT[M].name} portfolio in ${M === "IN" ? "rupees" : "US dollars"} · ${S.orders.filter(o => o.portfolio === M && o.status === "pending").length} pending order(s) · prices as of ${last || "(none yet)"}`;
   const hasMoney = S.ledger.some(r => r.portfolio === M);
   $("stats").innerHTML = hasMoney ? [
-    ["Equity", money(a.equity), ""], ["Cash", money(a.cash), a.cash < -0.005 ? "dn" : ""],
+    ["Account value", money(a.equity), ""], ["Cash", money(a.cash), a.cash < -0.005 ? "dn" : ""],
     ["Blocked on orders", money(BLK.total), ""], ["Available", money(avail()), avail() < -0.005 ? "dn" : ""], ["Invested", money(a.invested), ""],
     ["Net deposits", money(a.netDeposits), ""],
     ["Total P&L", money(a.pnl) + (a.netDeposits > 0 ? ` (${pct(a.pnl / a.netDeposits * 100)})` : ""), sgn(a.pnl)],
@@ -335,7 +335,7 @@ function viewDash() {
   const a = ACC, s = a.stats, cur = MKT[M].cur;
   CH = {};
   const c = a.curve;
-  const eq = lineChart("c-eq", [{ name: "Equity", color: "var(--accent)", pts: c.map(p => ({ x: p.date, y: p.equity })) },
+  const eq = lineChart("c-eq", [{ name: "Account value", color: "var(--accent)", pts: c.map(p => ({ x: p.date, y: p.equity })) },
                                 { name: "Net deposits", color: "var(--muted)", dash: 1, w: 1.5, pts: c.map(p => ({ x: p.date, y: p.netDep })) }], v => money(v, M, 0));
   const b = PM[MKT[M].bench] || [];
   let benchPts = [];
@@ -345,7 +345,7 @@ function viewDash() {
   const k = (l, v, cls) => `<div><b class="${cls || ""}">${v}</b><span>${l}</span></div>`;
   const ins = PC.insights(a, { currency: cur, benchName: MKT[M].benchName, stopSymbols: new Set(S.orders.filter(o => o.portfolio === M && o.side === "SELL" && o.type === "STOP" && (o.status === "pending")).map(o => o.symbol)) });
   const tags = PC.byTag(a.trades);
-  return `<h2>Equity</h2><div class="card">${eq}</div>
+  return `<h2>Account value</h2><div class="card">${eq}</div>
   <h2>Return vs ${esc(MKT[M].benchName)}</h2><div class="card">${rt}<p class="hint" style="margin:6px 0 0">Deposits and withdrawals are removed from the return, so adding money never looks like profit.</p></div>
   <h2>Performance</h2><div class="card"><div class="kv">
     ${k("Closed trades", s.n)}${k("Win rate", s.winRate == null ? "–" : s.winRate.toFixed(0) + "%")}
@@ -439,7 +439,7 @@ function viewFund() {
 /* ---------------------------------------------------------------- settings -- */
 const SLAB = {
   in: { brokerage_pct: "Brokerage (% of value)", stt_pct: "STT (% of value, buy and sell)", stamp_buy_pct: "Stamp duty (% of value, buy)", exch_pct: "Exchange charges (% of value)", sebi_pct: "SEBI fee (% of value)", gst_pct: "GST (% on brokerage, exchange and SEBI)", dp_charge: "DP charge per stock per sell day (₹, before GST)", slippage_bps: "Slippage on market/stop fills (basis points)" },
-  us: { brokerage_pct: "Brokerage (% of value)", min_brokerage: "Minimum brokerage per order ($)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
+  us: { brokerage_pct: "Brokerage (% of value)", min_brokerage: "Minimum brokerage per order ($)", exch_pct: "Exchange charges (% of value)", gst_pct: "GST (% on brokerage)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
   fx: { markup_pct: "FX markup over the reference rate (%)", gst_pct_of_inr: "GST on conversion (% of the INR sent)", bank_charge_inr: "Bank / wire charge per top-up (₹)", payin_fee_usd: "Pay-in fee when under the free limit ($)", payin_free_from_usd: "Pay-in free from ($)", tcs_rate_pct: "TCS rate (%)", tcs_threshold_inr: "TCS threshold per financial year (₹)", fallback_rate: "Fallback USD/INR rate (if the daily rate is unavailable)" },
 };
 const GTITLE = { in: "India trades (Dhan equity delivery)", us: "US trades (Dhan US Stocks)", fx: "Adding US funds (INR to USD)" };

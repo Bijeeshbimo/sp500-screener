@@ -14,7 +14,7 @@ import math
 DEFAULT_SETTINGS = {
     "in": {"brokerage_pct": 0.0, "stt_pct": 0.1, "stamp_buy_pct": 0.015, "exch_pct": 0.00297, "sebi_pct": 0.0001,
            "gst_pct": 18.0, "dp_charge": 12.5, "slippage_bps": 0.0},
-    "us": {"brokerage_pct": 0.25, "min_brokerage": 0.01, "other_pct": 0.0, "slippage_bps": 0.0},
+    "us": {"brokerage_pct": 0.25, "min_brokerage": 0.01, "exch_pct": 0.005, "gst_pct": 18.0, "other_pct": 0.0, "slippage_bps": 0.0},
     "fx": {"markup_pct": 1.0, "gst_pct_of_inr": 0.179, "bank_charge_inr": 0.0, "payin_fee_usd": 1.0,
            "payin_free_from_usd": 100.0, "tcs_enabled": False, "tcs_rate_pct": 20.0,
            "tcs_threshold_inr": 1000000.0, "fallback_rate": 95.0},
@@ -55,6 +55,8 @@ def trade_fees(portfolio: str, side: str, qty: float, price: float, settings: di
         raw = value * c["brokerage_pct"] / 100
         brokerage = max(c["min_brokerage"], math.ceil(raw * 100 - 1e-9) / 100)
         other = r2(value * c["other_pct"] / 100)
-        parts = {"brokerage": brokerage, "other": other}
+        exch = r2(value * c["exch_pct"] / 100)
+        gst = r2(brokerage * c["gst_pct"] / 100)
+        parts = {"brokerage": brokerage, "exchange": exch, "gst": gst, "other": other}
     parts["total"] = r2(sum(parts.values()))
     return parts

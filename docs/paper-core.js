@@ -8,7 +8,7 @@
 
   const DEFAULT_SETTINGS = {
     in: { brokerage_pct: 0, stt_pct: 0.1, stamp_buy_pct: 0.015, exch_pct: 0.00297, sebi_pct: 0.0001, gst_pct: 18, dp_charge: 12.5, slippage_bps: 0 },
-    us: { brokerage_pct: 0.25, min_brokerage: 0.01, other_pct: 0, slippage_bps: 0 },
+    us: { brokerage_pct: 0.25, min_brokerage: 0.01, exch_pct: 0.005, gst_pct: 18, other_pct: 0, slippage_bps: 0 },
     fx: { markup_pct: 1.0, gst_pct_of_inr: 0.179, bank_charge_inr: 0, payin_fee_usd: 1, payin_free_from_usd: 100,
           tcs_enabled: false, tcs_rate_pct: 20, tcs_threshold_inr: 1000000, fallback_rate: 95 },
     engine: { same_bar_priority: "stop" },
@@ -39,7 +39,7 @@
     } else {
       const c = settings.us;
       const brokerage = Math.max(c.min_brokerage, Math.ceil(value * c.brokerage_pct / 100 * 100 - 1e-9) / 100);
-      parts = { brokerage, other: r2(value * c.other_pct / 100) };
+      parts = { brokerage, exchange: r2(value * c.exch_pct / 100), gst: r2(brokerage * c.gst_pct / 100), other: r2(value * c.other_pct / 100) };
     }
     let t = 0; for (const k in parts) t += parts[k];
     parts.total = r2(t);
