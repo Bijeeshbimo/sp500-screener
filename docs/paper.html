@@ -43,6 +43,7 @@
   tfoot td { font-weight:600; border-top:1px solid var(--line); }
   .up { color:var(--up); font-weight:600; } .dn { color:var(--down); font-weight:600; } .mut { color:var(--muted); }
   .nm { display:block; color:var(--muted); font-size:12px; }
+  tr.prow { cursor:pointer; } tr.chrow td { padding:6px 4px; } tr.chrow:hover { background:none; } td a { text-decoration:none; }
   button, .btn { font:inherit; font-size:13px; padding:5px 12px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); cursor:pointer; }
   button:hover { border-color:var(--accent); }
   button.primary { background:var(--accent); color:var(--chipfg); border-color:var(--accent); font-weight:600; }
@@ -293,7 +294,7 @@ function render() {
   ].map(s => `<div class="stat"><b class="${s[2]}">${s[1]}</b><span>${s[0]}</span></div>`).join("") : "";
   const v = { dash: viewDash, pos: viewPos, ord: viewOrd, trd: viewTrd, fund: viewFund, set: viewSet }[VIEW]();
   $("view").innerHTML = (a.cash < -0.005 ? `<div class="banner err">Cash is negative. A deposit is missing or a trade was entered or edited with the wrong amount. Check the Funds and Trades tabs.</div>` : "") + v;
-  if (VIEW === "dash") drawCharts();
+  if (VIEW === "dash" || VIEW === "pos") drawCharts();
 }
 const empty = msg => `<div class="card empty">${msg}</div>`;
 
@@ -363,20 +364,35 @@ function viewDash() {
 }
 
 /* --------------------------------------------------------------- positions -- */
+const OPENPOS = new Set();
+const tvUrl = sym => "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent((M === "IN" ? "NSE:" + sym.replace(/[&-]/g, "_") : sym.replace(/-/g, ".")));
+const targetOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "LIMIT" && (o.status === "pending" || o.status === "waiting"));
+function posChart(p, stop, so) {
+  const px = (PM[p.yf] || []).filter(x => x.date >= addDays(p.since, -14)).sort((a, b) => (a.date < b.date ? -1 : 1));
+  if (px.length < 2) return '<p class="hint">The chart needs two or more daily closes; it fills in after the next daily job.</p>';
+  const t = targetOrderFor(p.symbol), a = px[0].date, z = px[px.length - 1].date;
+  const line = (name, color, v) => ({ name: name + " " + money(v), color, w: 1.5, dash: true, pts: [{ x: a, y: v }, { x: z, y: v }] });
+  const series = [{ name: "Close", color: "var(--accent)", pts: px.map(x => ({ x: x.date, y: x.close })) }, line("Entry", "#4f8cff", p.avg)];
+  if (stop != null) series.push(line(so ? "Stop-loss" : "Planned stop", "#e5534b", stop));
+  if (t) series.push(line("Target", "#2ea043", +t.price));
+  return lineChart("c-pos-" + p.symbol.replace(/\W/g, "_"), series, v => money(v));
+}
+const addDays = (d, n) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10);
 function viewPos() {
   const a = ACC, P = a.positions;
   if (!P.length) return empty("No open positions.<br><br>" + `<button class="primary" data-act="neworder">New order</button>`);
   const rows = P.map(p => {
     const so = stopOrderFor(p.symbol), stop = so ? +so.price : p.stop, dist = stop != null && p.price ? (p.price - stop) / p.price * 100 : null;
-    return `<tr><td>${esc(p.symbol)}${p.tag ? `<span class="nm">${esc(p.tag)}</span>` : ""}</td><td>${num(p.qty)}</td><td>${money(p.avg)}</td><td>${money(p.price)}<span class="nm">${p.priceDate || "no price yet"}</span></td>
+    const open = OPENPOS.has(p.symbol);
+    return `<tr class="prow" data-act="togglepos" data-sym="${esc(p.symbol)}"><td>${esc(p.symbol)} <a href="${tvUrl(p.symbol)}" target="_blank" rel="noopener" data-act="none" title="Open in TradingView">&#8599;</a>${p.tag ? `<span class="nm">${esc(p.tag)}</span>` : ""}</td><td>${num(p.qty)}</td><td>${money(p.avg)}</td><td>${money(p.price)}<span class="nm">${p.priceDate || "no price yet"}</span></td>
       <td>${money(p.value)}</td><td class="${sgn(p.pnl)}">${money(p.pnl)}</td><td class="${sgn(p.pct)}">${pct(p.pct)}</td>
       <td>${stop != null ? money(stop) + `<span class="nm">${so ? "stop order" : "planned"}${dist != null ? ` · ${dist.toFixed(1)}% below` : ""}</span>` : '<span class="mut">none</span>'}</td><td>${p.days}</td>
-      <td><button class="sm" data-act="sell" data-sym="${esc(p.symbol)}">Sell</button><button class="sm" data-act="setstop" data-sym="${esc(p.symbol)}">${so ? "Move stop" : "Set stop"}</button></td></tr>`;
+      <td><button class="sm" data-act="sell" data-sym="${esc(p.symbol)}">Sell</button><button class="sm" data-act="setstop" data-sym="${esc(p.symbol)}">${so ? "Move stop" : "Set stop"}</button></td></tr>${open ? `<tr class="chrow"><td colspan="10">${posChart(p, stop, so)}</td></tr>` : ""}`;
   }).join("");
   return `<div class="bar"><button class="primary" data-act="neworder">New order</button></div>
   <div class="tw"><table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last close</th><th>Value</th><th>P&amp;L</th><th>%</th><th>Stop</th><th>Days</th><th></th></tr></thead><tbody>${rows}</tbody>
   <tfoot><tr><td>Total</td><td></td><td></td><td></td><td>${money(a.invested)}</td><td class="${sgn(a.unrealized)}">${money(a.unrealized)}</td><td></td><td></td><td></td><td></td></tr></tfoot></table></div>
-  <p class="hint">Average cost includes buying charges. Last close comes from the daily job; it updates after each market closes.</p>`;
+  <p class="hint">Average cost includes buying charges. Last close comes from the daily job; it updates after each market closes. Tap a row for its chart (entry, stop-loss and target lines), or &#8599; for TradingView.</p>`;
 }
 
 /* ------------------------------------------------------------------ orders -- */
@@ -700,6 +716,8 @@ document.addEventListener("click", async e => {
       if (!confirm("Delete this " + r.kind + " of " + money(r.amount) + "?")) return;
       await STORE.remove("ledger", id); await reload(); return render();
     }
+    case "none": return;
+    case "togglepos": { const k = b.dataset.sym; OPENPOS.has(k) ? OPENPOS.delete(k) : OPENPOS.add(k); return render(); }
     case "neworder": return orderDialog();
     case "sell": { const p = ACC.positions.find(x => x.symbol === b.dataset.sym); return orderDialog({ sym: p.symbol, side: "SELL", qty: p.qty, type: "MARKET" }); }
     case "setstop": return stopDialog(b.dataset.sym);
