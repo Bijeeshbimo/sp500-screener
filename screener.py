@@ -1214,6 +1214,7 @@ def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) ->
         raise RuntimeError(f"only {scanned} tickers returned data (need {cfg['min_tickers']})")
 
     data_date = pd.Series(dates).mode().iloc[0]        # ignore stragglers with stale last bars
+    print(f"  last-bar dates ({code}): " + ", ".join(f"{d} x{n}" for d, n in pd.Series(dates).value_counts().head(4).items()) + f"; using {data_date}")
     rows = [r for r in rows if r.pop("date") == data_date]
     ranks = rs_ranks({k: v for k, (d, v) in ret6.items() if d == data_date})
     pairs = []
