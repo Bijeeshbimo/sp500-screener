@@ -440,15 +440,16 @@ function viewFund() {
 const SLAB = {
   in: { brokerage_pct: "Brokerage (% of value)", stt_pct: "STT (% of value, buy and sell)", stamp_buy_pct: "Stamp duty (% of value, buy)", exch_pct: "Exchange charges (% of value)", sebi_pct: "SEBI fee (% of value)", gst_pct: "GST (% on brokerage, exchange and SEBI)", dp_charge: "DP charge per stock per sell day (₹, before GST)", slippage_bps: "Slippage on market/stop fills (basis points)" },
   us: { brokerage_pct: "Brokerage (% of value)", min_brokerage: "Minimum brokerage per order ($)", exch_pct: "Exchange charges (% of value)", gst_pct: "GST (% on brokerage)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
+  risk: { in: "Default risk per trade (₹)", us: "Default risk per trade ($)" },
   fx: { markup_pct: "FX markup over the reference rate (%)", gst_pct_of_inr: "GST on conversion (% of the INR sent)", bank_charge_inr: "Bank / wire charge per top-up (₹)", payin_fee_usd: "Pay-in fee when under the free limit ($)", payin_free_from_usd: "Pay-in free from ($)", tcs_rate_pct: "TCS rate (%)", tcs_threshold_inr: "TCS threshold per financial year (₹)", fallback_rate: "Fallback USD/INR rate (if the daily rate is unavailable)" },
 };
-const GTITLE = { in: "India trades (Dhan equity delivery)", us: "US trades (Dhan US Stocks)", fx: "Adding US funds (INR to USD)" };
+const GTITLE = { in: "India trades (Dhan equity delivery)", us: "US trades (Dhan US Stocks)", fx: "Adding US funds (INR to USD)", risk: "Position sizing" };
 function viewSet() {
   const st = S.settings;
   const grp = g => `<h2>${GTITLE[g]}</h2><div class="card"><div class="grid">${Object.keys(SLAB[g]).map(k => `<label>${SLAB[g][k]}<input data-s="${g}.${k}" type="number" step="any" value="${st[g][k]}"></label>`).join("")}</div>
     ${g === "fx" ? `<p style="margin:10px 0 0"><label class="chk"><input type="checkbox" data-s="fx.tcs_enabled" ${st.fx.tcs_enabled ? "checked" : ""}>Add TCS to new US top-ups when over the threshold</label></p>` : ""}</div>`;
   return `<p class="hint">Starting values follow Dhan&rsquo;s published pricing. Past trades and top-ups keep the charges they were saved with; changing a rate only affects new ones (or a fill you edit).</p>
-  ${grp("in")}${grp("us")}${grp("fx")}
+  ${grp("in")}${grp("us")}${grp("fx")}${grp("risk")}
   <h2>Order engine</h2><div class="card"><label>If a stop and a target could both trigger in the same session, assume the<select data-s="engine.same_bar_priority"><option value="stop"${st.engine.same_bar_priority === "stop" ? " selected" : ""}>stop hit first (conservative)</option><option value="target"${st.engine.same_bar_priority === "target" ? " selected" : ""}>target hit first</option></select></label></div>
   <div class="bar"><button class="primary" data-act="savesettings">Save settings</button><button data-act="resetsettings">Reset to defaults</button><button data-act="export">Download a backup (JSON)</button></div>`;
 }
@@ -555,8 +556,9 @@ function orderDialog(pref) {
     <div class="grid"><label>Symbol<input name="sym" list="symlist" autocomplete="off" value="${esc(pref.sym || "")}"><datalist id="symlist"></datalist></label>
       <label>Side<select name="side"><option>BUY</option><option>SELL</option></select></label>
       <label>Quantity<input name="qty" type="number" step="${M === "IN" ? 1 : "any"}" inputmode="decimal"></label>
-      <label>Type<select name="type"><option value="MARKET">Market (next open)</option><option value="LIMIT">Limit</option><option value="STOP">Stop</option></select></label>
-      <label id="l-price" hidden>Price<input name="price" type="number" step="any" inputmode="decimal"></label>
+      <label>Type<select name="type"><option value="STOP">Stop (triggers at your price)</option><option value="LIMIT">Limit</option><option value="MARKET">Market (next open)</option></select></label>
+      <label id="l-price" hidden>Price<input name="price" type="number" step="any" inputmode="decimal" value="${esc(pref.px || "")}"></label>
+      <label id="l-risk">Risk amount (${MKT[M].cur})<input name="risk" type="number" step="any" inputmode="decimal" value="${(S.settings.risk || {})[M.toLowerCase()] || ""}"></label>
       <label>Fill from sessions after<input name="after" type="date" value="${lastSession()}"></label>
       <label>Expires (optional)<input name="expiry" type="date"></label>
       <label>Tag (optional)<input name="tag" list="taglist" value="${esc(pref.tag || "")}"><datalist id="taglist">${[...new Set(S.fills.concat(S.orders).map(x => x.tag).filter(Boolean))].map(t => `<option value="${esc(t)}">`).join("")}</datalist></label></div>
@@ -564,24 +566,38 @@ function orderDialog(pref) {
       <label>Bracket: stop-loss price<input name="bstop" type="number" step="any" placeholder="optional"></label>
       <label>Bracket: target price<input name="btgt" type="number" step="any" placeholder="optional"></label></div></div>
     <label>Note<input name="note" value="${esc(pref.note || "")}"></label>
-    <p class="hint" id="est" style="margin:10px 0 0"></p>${acts("Place order")}`);
+    <p class="hint" id="rinfo" style="margin:10px 0 0"></p><p class="hint" id="est" style="margin:6px 0 0"></p>${acts("Place order")}`);
   const sync = () => {
     $("l-price").hidden = f.elements.type.value === "MARKET";
-    $("buyonly").hidden = f.elements.side.value !== "BUY";
+    $("buyonly").hidden = f.elements.side.value !== "BUY"; $("l-risk").hidden = f.elements.side.value !== "BUY";
     const sym = val(f, "sym").toUpperCase(), q = +val(f, "qty") || 0, px = +val(f, "price") || refPrice(sym), s = (SYMS[M] || []).find(x => x.sym === sym);
     let t = s ? `${esc(s.name)} · last screened close ${money(s.close)}. ` : "";
     if (px && q) { const fee = PC.tradeFees(M, f.elements.side.value, q, px, S.settings, true); t += `About ${money(q * px)} plus ${money(fee.total)} charges. Available funds: ${money(avail())}${BLK.total ? ` (${money(BLK.total)} blocked on pending orders)` : ""}.`; }
     $("est").innerHTML = t;
   };
+  // Risk and quantity are linked through the stop distance: type either one and the other follows.
+  let driver = "risk";
+  const calc = () => {
+    const risk$ = $("rinfo"); if (f.elements.side.value !== "BUY") { risk$.textContent = ""; return; }
+    const sym = val(f, "sym").toUpperCase(), type = f.elements.type.value;
+    const px = type === "MARKET" ? refPrice(sym) : +val(f, "price"), stop = +val(f, "bstop") || +val(f, "stopref"), per = px - stop;
+    if (!(px > 0 && stop > 0 && per > 0)) { risk$.textContent = "Enter the entry price and a stop-loss below it to link risk and quantity."; return; }
+    if (driver === "risk") { const q = (+val(f, "risk") || 0) / per; f.elements.qty.value = q > 0 ? (M === "IN" ? Math.round(q) : Math.floor(q * 1e4) / 1e4) : ""; }
+    else f.elements.risk.value = (Math.round((+val(f, "qty") || 0) * per * 100) / 100) || "";
+    const q = +val(f, "qty") || 0;
+    risk$.textContent = q ? `Stop distance ${money(per)} per share. If the stop is hit you lose about ${money(q * per)} on ${q} shares, before charges.` : `Stop distance ${money(per)} per share.`;
+  };
+  f.addEventListener("input", e => { if (e.target.name === "risk") driver = "risk"; else if (e.target.name === "qty") driver = "qty"; calc(); });
+  f.addEventListener("change", e => { if (e.target.name === "side" || e.target.name === "type") calc(); });
   f.addEventListener("input", sync); f.addEventListener("change", sync);
   // the planned stop follows the bracket stop-loss until you type your own planned stop
   let stopTouched = false;
   f.elements.stopref.addEventListener("input", () => { stopTouched = true; });
   f.elements.bstop.addEventListener("input", () => { if (!stopTouched) f.elements.stopref.value = f.elements.bstop.value; });
   f.elements.sym.addEventListener("focus", async () => { const L = await symbolList(); $("symlist").innerHTML = L.map(s => `<option value="${esc(s.sym)}">${esc(s.name)}</option>`).join(""); sync(); }, { once: true });
-  if (pref.side) f.elements.side.value = pref.side; if (pref.qty) f.elements.qty.value = pref.qty; if (pref.type) f.elements.type.value = pref.type;
-  if (pref.sym && !SYMS[M]) symbolList().then(sync);
-  sync();
+  if (pref.side) f.elements.side.value = pref.side; if (pref.qty) { f.elements.qty.value = pref.qty; driver = "qty"; } if (pref.type) f.elements.type.value = pref.type;
+  if (pref.sym && !SYMS[M]) symbolList().then(() => { calc(); sync(); });
+  calc(); sync();
   f.onsubmit = async e => {
     e.preventDefault();
     const sym = val(f, "sym").toUpperCase().replace(/\.NS$/, ""), side = f.elements.side.value, type = f.elements.type.value, qty = nval(f, "qty"), price = nval(f, "price");
@@ -722,7 +738,7 @@ function handleParams() {
   if (!sym) return;
   const m = q.get("m") === "US" ? "US" : "IN"; M = m; ls.set("paper-m", M); render();
   history.replaceState(null, "", location.pathname);
-  orderDialog({ sym: sym, side: "BUY", type: "MARKET", stop: q.get("stop") || "", tag: "screener", note: "From the screener" + (q.get("px") ? ` (close ${q.get("px")})` : "") });
+  orderDialog({ sym: sym, side: "BUY", type: "STOP", px: q.get("px") || "", stop: q.get("stop") || "", tag: "screener", note: "From the screener" + (q.get("px") ? ` (close ${q.get("px")})` : "") });
 }
 buildTabs();
 boot();

@@ -12,6 +12,7 @@
     fx: { markup_pct: 1.0, gst_pct_of_inr: 0.179, bank_charge_inr: 0, payin_fee_usd: 1, payin_free_from_usd: 100,
           tcs_enabled: false, tcs_rate_pct: 20, tcs_threshold_inr: 1000000, fallback_rate: 95 },
     engine: { same_bar_priority: "stop" },
+    risk: { in: 5000, us: 50 },
   };
 
   const clone = o => JSON.parse(JSON.stringify(o));
