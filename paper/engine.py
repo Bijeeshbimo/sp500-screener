@@ -207,8 +207,14 @@ class FirestoreStore:
     def patch_order(self, uid: str, order_id: str, patch: dict) -> None:
         self.db.document(f"users/{uid}/orders/{order_id}").update(patch)
 
-    def put_prices(self, uid: str, yf: str, dates: list[str], closes: list[float]) -> None:
-        self.db.document(f"users/{uid}/prices/{yf.replace('/', '_')}").set({"yf": yf, "dates": dates, "closes": closes})
+    def put_prices(self, uid: str, yf: str, dates: list[str], closes: list[float], chart: dict | None = None) -> None:
+        doc = {"yf": yf, "dates": dates, "closes": closes}
+        if chart:
+            doc["chart"] = chart          # recent open/high/low/close bars for the candlestick preview on the positions tab
+        self.db.document(f"users/{uid}/prices/{yf.replace('/', '_')}").set(doc)
+
+
+CHART_BARS = 180       # sessions of candles kept per ticker (126 shown, the rest warms up the moving averages)
 
 
 def fetch_bars(yfs: list[str], start: str) -> dict[str, list[tuple]]:
@@ -279,13 +285,19 @@ def run_user(store, uid: str, fetch=None) -> dict:
     if not yfs or not starts:
         return summary
     start = (dt.date.fromisoformat(min(starts)) - dt.timedelta(days=7)).isoformat()
-    bars = fetch(sorted(yfs), start)
+    chart_start = (dt.date.today() - dt.timedelta(days=300)).isoformat()      # extra history only for the chart
+    all_bars = fetch(sorted(yfs), min(start, chart_start))
+    bars = {t: [b for b in rows if b[0] >= start] for t, rows in all_bars.items()}
+    bars = {t: rows for t, rows in bars.items() if rows}
     missing = sorted(y for y in yfs if y not in bars)
     summary["missing"] = missing
     if missing:
         print("no price data for", missing)
     for t, rows in bars.items():             # the whole window every time, so the stored series is always complete
-        store.put_prices(uid, t, [b[0] for b in rows], [round(b[4], 4) for b in rows])
+        tail = all_bars[t][-CHART_BARS:]
+        chart = {"d": [b[0] for b in tail], "o": [round(b[1], 4) for b in tail], "h": [round(b[2], 4) for b in tail],
+                 "l": [round(b[3], 4) for b in tail], "c": [round(b[4], 4) for b in tail]}
+        store.put_prices(uid, t, [b[0] for b in rows], [round(b[4], 4) for b in rows], chart)
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     for p in ("IN", "US"):
         po = [o for o in o_u if o["portfolio"] == p]

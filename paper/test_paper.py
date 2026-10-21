@@ -177,8 +177,8 @@ class FakeStore:
     def patch_order(self, uid, oid, patch):
         self.d[(uid, "orders")][oid].update(patch)
 
-    def put_prices(self, uid, yf, dates, closes):
-        self.put(uid, "prices", yf, {"yf": yf, "dates": dates, "closes": closes})
+    def put_prices(self, uid, yf, dates, closes, chart=None):
+        self.put(uid, "prices", yf, {"yf": yf, "dates": dates, "closes": closes, **({"chart": chart} if chart else {})})
 
 
 def stub_fetch(days):
@@ -212,6 +212,8 @@ class EngineRun(unittest.TestCase):
         # prices stored as one document per ticker, whole window
         self.assertEqual(self.st.d[("u1", "prices")]["ABC.NS"]["dates"], ["2026-10-02"])
         self.assertIn("^NSEI", self.st.d[("u1", "prices")])
+        ch = self.st.d[("u1", "prices")]["ABC.NS"]["chart"]            # candles for the positions preview
+        self.assertEqual(set(ch), {"d", "o", "h", "l", "c"}); self.assertEqual(len(ch["d"]), len(ch["h"]))
 
         again = run_user(self.st, "u1", stub_fetch(day1))                      # same data again: nothing changes
         self.assertEqual((again["fills"], len(self.st.d[("u1", "fills")])), (0, 1))

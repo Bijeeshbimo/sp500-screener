@@ -38,6 +38,15 @@
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
   th, td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); font-size:14px; }
   th:first-child, td:first-child, .l { text-align:left; }
+  #pvbox { position:fixed; z-index:50; width:min(420px, calc(100vw - 16px)); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; box-shadow:0 6px 24px rgba(0,0,0,.35); pointer-events:none; }
+  #pvbox .hd, .pvin .hd { font-size:13px; margin-bottom:2px; }
+  .lgd { display:flex; flex-wrap:wrap; gap:3px 12px; font-size:11px; color:var(--muted); margin:2px 0 4px; }
+  .lgd .sw { display:inline-block; width:14px; border-top:2px solid; vertical-align:middle; margin-right:4px; }
+  svg.pvs { display:block; width:100%; height:auto; max-width:560px; }
+  .pvs .up { fill:var(--up); stroke:var(--up); } .pvs .dn { fill:var(--down); stroke:var(--down); }
+  .pvs .bd { stroke:none; } .pvs .wk { stroke-width:1; } .pvs .gr { stroke:var(--line); stroke-width:1; }
+  .pvs .em { fill:none; stroke-width:1.3; stroke-linejoin:round; } .pvs .e20 { stroke:#e5484d; } .pvs .e50 { stroke:#6c9bff; }
+  .pvs text { font:10px system-ui,sans-serif; fill:var(--muted); }
   th.srt { cursor:pointer; user-select:none; } th.srt:hover { color:var(--fg); }
   th.asc::after { content:" \25B2"; font-size:9px; } th.desc::after { content:" \25BC"; font-size:9px; }
   th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
@@ -119,8 +128,10 @@
 </div>
 <dialog id="dlg"></dialog>
 <div id="toast" hidden></div>
+<div id="pvbox" hidden></div>
 <script src="paper-config.js"></script>
 <script src="paper-core.js"></script>
+<div id="pvbox" hidden></div>
 <script>
 "use strict";
 const PC = PaperCore, CFG = window.PAPER_CONFIG || {};
@@ -132,7 +143,7 @@ const MKT = { IN: { cur: "₹", loc: "en-IN", name: "India", bench: "^NSEI", ben
 const VIEWS = [["dash", "Dashboard"], ["pos", "Positions"], ["ord", "Orders"], ["trd", "Trades"], ["fund", "Funds"], ["set", "Settings"]];
 let M = ls.get("paper-m") === "US" ? "US" : "IN", VIEW = ls.get("paper-v") || "dash", OFILTER = "open";
 let BLK = { total: 0, items: {}, unpriced: 0 };
-let STORE = null, S = { ledger: [], orders: [], fills: [], prices: [], settings: PC.mergeSettings({}) }, PM = {}, ACC = null, SESS = {}, FX = null, SYMS = {};
+let STORE = null, S = { ledger: [], orders: [], fills: [], prices: [], settings: PC.mergeSettings({}) }, PM = {}, ACC = null, SESS = {}, FX = null, SYMS = {}, CANDLES = {};
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const money = (x, mk, d) => x == null || isNaN(x) ? "–" : (x < 0 ? "-" : "") + MKT[mk || M].cur + Math.abs(x).toLocaleString(MKT[mk || M].loc, { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d });
@@ -210,7 +221,7 @@ async function firebaseStore() {
       const snap = await col(t).get();
       if (t !== "prices") return snap.docs.map(withId);
       const out = [];                                      // one document per ticker holds its dates and closes
-      for (const d of snap.docs) { const x = d.data(), yf = x.yf || d.id; (x.dates || []).forEach((date, i) => out.push({ yf, date, close: x.closes[i] })); }
+      for (const d of snap.docs) { const x = d.data(), yf = x.yf || d.id; if (x.chart && x.chart.d) CANDLES[yf] = x.chart; (x.dates || []).forEach((date, i) => out.push({ yf, date, close: x.closes[i] })); }
       return out;
     },
     async insert(t, row) { const r = clean({ created_at: new Date().toISOString(), ...row }); const ref = await col(t).add(r); return { id: ref.id, ...r }; },
@@ -300,6 +311,23 @@ function render() {
   makeSortable();
 }
 
+/* Hover a position row (mouse devices) for a candlestick preview with entry, stop-loss and target lines. */
+(function () {
+  const box = $("pvbox");
+  const place = (x, y) => { const r = box.getBoundingClientRect(); let l = x + 16, t = y + 16; if (l + r.width > innerWidth - 8) l = x - r.width - 16; if (l < 8) l = 8; if (t + r.height > innerHeight - 8) t = innerHeight - r.height - 8; box.style.left = l + "px"; box.style.top = Math.max(8, t) + "px"; };
+  document.addEventListener("mouseover", e => {
+    const tr = e.target.closest && e.target.closest("tr.prow");
+    if (!tr || !$("view").contains(tr) || (tr.nextElementSibling && tr.nextElementSibling.classList.contains("chrow"))) { box.hidden = true; return; }
+    const p = ACC && ACC.positions.find(x => x.symbol === tr.dataset.sym);
+    if (!p || !hasCandles(p)) { box.hidden = true; return; }
+    const so = stopOrderFor(p.symbol), stop = so ? +so.price : p.stop;
+    box.innerHTML = `<div class="hd"><b>${esc(p.symbol)}</b> &middot; last close ${money(p.price)}</div>` + candleSvg(p, stop, so);
+    box.hidden = false; place(e.clientX, e.clientY);
+  });
+  document.addEventListener("mousemove", e => { if (!box.hidden) place(e.clientX, e.clientY); });
+  document.addEventListener("mouseout", e => { if (e.target.closest && e.target.closest("tr.prow") && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("tr.prow") === e.target.closest("tr.prow"))) box.hidden = true; });
+  document.addEventListener("click", () => { box.hidden = true; });
+})();
 /* Click a column header to sort that table; click again to reverse, and a third time to restore the original order. */
 const SORTS = {};
 const NUMRE = /^\s*([-−+])?\s*[₹$]?\s*([-−])?\s*(\d[\d,]*(?:\.\d+)?)/;
@@ -417,7 +445,35 @@ function viewDash() {
 const OPENPOS = new Set();
 const tvUrl = sym => "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent((M === "IN" ? "NSE:" + sym.replace(/[&-]/g, "_") : sym.replace(/-/g, ".")));
 const targetOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "LIMIT" && (o.status === "pending" || o.status === "waiting"));
+function posLevels(p, stop, so) {
+  const t = targetOrderFor(p.symbol);
+  return [["Entry", "#4f8cff", p.avg], stop != null ? [so ? "Stop-loss" : "Planned stop", "#e5534b", +stop] : null, t ? ["Target", "#2ea043", +t.price] : null].filter(Boolean);
+}
+/* Candlestick preview: last 126 sessions, 20/50 EMA, with entry (blue), stop-loss (red) and target (green) lines. */
+function candleSvg(p, stop, so) {
+  const c = CANDLES[p.yf], N = c.d.length, K = Math.min(126, N), s0 = N - K, lv = posLevels(p, stop, so);
+  const ema = n => { const k = 2 / (n + 1); let e = c.c[0]; return c.c.map(v => (e = v * k + e * (1 - k))); };
+  const e20 = ema(20), e50 = ema(50);
+  const W = 400, H = 214, L = 6, R = 52, PT = 8, PH = 186, pw = W - L - R, step = pw / K, bw = Math.max(1, step * 0.66);
+  let hi = Math.max(...c.h.slice(s0), ...lv.map(x => x[2])), lo = Math.min(...c.l.slice(s0), ...lv.map(x => x[2]));
+  const pad = (hi - lo) * 0.05 || hi * 0.02; hi += pad; lo -= pad;
+  const Y = v => PT + (hi - v) / (hi - lo) * PH, X = i => L + (i + 0.5) * step, f = v => v.toFixed(v >= 100 ? 1 : 2);
+  let g = "";
+  for (let k = 0; k <= 3; k++) { const v = lo + (hi - lo) * k / 3, y = Y(v); g += `<line class="gr" x1="${L}" x2="${L + pw}" y1="${y}" y2="${y}"/><text x="${L + pw + 4}" y="${y + 3}">${f(v)}</text>`; }
+  for (let i = 0; i < K; i++) {
+    const j = s0 + i, cls = c.c[j] >= c.o[j] ? "up" : "dn", yo = Y(c.o[j]), yc = Y(c.c[j]);
+    g += `<line class="wk ${cls}" x1="${X(i)}" x2="${X(i)}" y1="${Y(c.h[j])}" y2="${Y(c.l[j])}"/><rect class="bd ${cls}" x="${X(i) - bw / 2}" y="${Math.min(yo, yc)}" width="${bw}" height="${Math.max(Math.abs(yo - yc), 1)}"/>`;
+  }
+  const pl = (arr, cl) => `<polyline class="em ${cl}" points="${arr.slice(s0).map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1)).join(" ")}"/>`;
+  g += pl(e50, "e50") + pl(e20, "e20");
+  for (const [name, col, v] of lv) g += `<line x1="${L}" x2="${L + pw}" y1="${Y(v)}" y2="${Y(v)}" stroke="${col}" stroke-width="1.4" stroke-dasharray="5 3"/><text x="${L + 3}" y="${Y(v) - 3}" fill="${col}" style="fill:${col}">${name} ${f(v)}</text>`;
+  g += `<text x="${L}" y="${H - 3}">${c.d[s0]}</text><text x="${L + pw}" y="${H - 3}" text-anchor="end">${c.d[N - 1]}</text>`;
+  const lg = lv.map(([n, col]) => `<span><i class="sw" style="border-color:${col}"></i>${n}</span>`).join("") + '<span><i class="sw" style="border-color:#e5484d"></i>20 EMA</span><span><i class="sw" style="border-color:#6c9bff"></i>50 EMA</span>';
+  return `<div class="lgd">${lg}</div><svg class="pvs" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(p.symbol)} daily candles">${g}</svg>`;
+}
+const hasCandles = p => CANDLES[p.yf] && CANDLES[p.yf].d && CANDLES[p.yf].d.length > 1;
 function posChart(p, stop, so) {
+  if (hasCandles(p)) return `<div class="pvin">${candleSvg(p, stop, so)}</div>`;
   const px = (PM[p.yf] || []).filter(x => x.date >= addDays(p.since, -14)).sort((a, b) => (a.date < b.date ? -1 : 1));
   if (px.length < 2) return '<p class="hint">The chart needs two or more daily closes; it fills in after the next daily job.</p>';
   const t = targetOrderFor(p.symbol), a = px[0].date, z = px[px.length - 1].date;
