@@ -38,6 +38,8 @@
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; white-space:nowrap; }
   th, td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); font-size:14px; }
   th:first-child, td:first-child, .l { text-align:left; }
+  th.srt { cursor:pointer; user-select:none; } th.srt:hover { color:var(--fg); }
+  th.asc::after { content:" \25B2"; font-size:9px; } th.desc::after { content:" \25BC"; font-size:9px; }
   th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
   tr:last-child td { border-bottom:0; }
   tfoot td { font-weight:600; border-top:1px solid var(--line); }
@@ -295,6 +297,54 @@ function render() {
   const v = { dash: viewDash, pos: viewPos, ord: viewOrd, trd: viewTrd, fund: viewFund, set: viewSet }[VIEW]();
   $("view").innerHTML = (a.cash < -0.005 ? `<div class="banner err">Cash is negative. A deposit is missing or a trade was entered or edited with the wrong amount. Check the Funds and Trades tabs.</div>` : "") + v;
   if (VIEW === "dash" || VIEW === "pos") drawCharts();
+  makeSortable();
+}
+
+/* Click a column header to sort that table; click again to reverse, and a third time to restore the original order. */
+const SORTS = {};
+const NUMRE = /^\s*([-−+])?\s*[₹$]?\s*([-−])?\s*(\d[\d,]*(?:\.\d+)?)/;
+function cellKey(td) {
+  const t = (td ? td.textContent : "").replace(/\s+/g, " ").trim();
+  if (!t || t === "-" || t === "–") return { e: true };
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return { s: t };
+  const m = NUMRE.exec(t);
+  if (m) return { n: parseFloat(m[3].replace(/,/g, "")) * (m[1] === "-" || m[1] === "−" || m[2] === "-" || m[2] === "−" ? -1 : 1) };
+  return { s: t.toLowerCase() };
+}
+function applySort(table, key) {
+  const body = table.tBodies[0]; if (!body) return;
+  const groups = [];
+  for (const tr of [...body.rows]) { if (tr.classList.contains("chrow") && groups.length) groups[groups.length - 1].push(tr); else groups.push([tr]); }
+  groups.forEach((g, i) => { if (g[0].dataset.i == null) g[0].dataset.i = i; });
+  const st = SORTS[key];
+  if (st) groups.sort((x, y) => {
+    const a = cellKey(x[0].cells[st.col]), b = cellKey(y[0].cells[st.col]);
+    if (a.e || b.e) return a.e && b.e ? 0 : a.e ? 1 : -1;                // blanks always last
+    let c;
+    if (a.n != null && b.n != null) c = a.n - b.n; else if (a.n != null) return -1; else if (b.n != null) return 1; else c = a.s < b.s ? -1 : a.s > b.s ? 1 : 0;
+    return st.dir * c;
+  });
+  else groups.sort((x, y) => x[0].dataset.i - y[0].dataset.i);
+  for (const g of groups) for (const tr of g) body.appendChild(tr);
+  [...table.tHead.rows[0].cells].forEach((th, i) => { th.classList.toggle("asc", !!st && st.col === i && st.dir === 1); th.classList.toggle("desc", !!st && st.col === i && st.dir === -1); });
+}
+function makeSortable() {
+  [...$("view").querySelectorAll("table")].forEach((table, ti) => {
+    const key = VIEW + ":" + M + ":" + ti, head = table.tHead && table.tHead.rows[0];
+    if (!head || !table.tBodies[0] || table.tBodies[0].rows.length < 2) return;
+    [...head.cells].forEach((th, col) => {
+      if (!th.textContent.trim()) return;
+      th.classList.add("srt"); th.tabIndex = 0; th.title = "Click to sort";
+      const go = () => {
+        const st = SORTS[key];
+        if (!st || st.col !== col) SORTS[key] = { col, dir: 1 }; else if (st.dir === 1) st.dir = -1; else delete SORTS[key];
+        applySort(table, key);
+      };
+      th.addEventListener("click", go);
+      th.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+    if (SORTS[key]) applySort(table, key);
+  });
 }
 const empty = msg => `<div class="card empty">${msg}</div>`;
 
