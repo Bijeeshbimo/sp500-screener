@@ -561,7 +561,7 @@ function viewFund() {
 /* ---------------------------------------------------------------- settings -- */
 const SLAB = {
   in: { brokerage_pct: "Brokerage (% of value)", stt_pct: "STT (% of value, buy and sell)", stamp_buy_pct: "Stamp duty (% of value, buy)", exch_pct: "Exchange charges (% of value)", sebi_pct: "SEBI fee (% of value)", gst_pct: "GST (% on brokerage, exchange and SEBI)", dp_charge: "DP charge per stock per sell day (₹, before GST)", slippage_bps: "Slippage on market/stop fills (basis points)" },
-  us: { brokerage_pct: "Brokerage (% of value)", min_brokerage: "Minimum brokerage per order ($)", exch_pct: "Exchange charges (% of value)", gst_pct: "GST (% on brokerage)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
+  us: { brokerage_pct: "Brokerage (% of value, from 26 Oct 2026)", legacy_brokerage_pct: "Brokerage before 26 Oct 2026 (% of value)", min_brokerage: "Minimum brokerage per order ($)", max_brokerage: "Maximum brokerage per order ($)", exch_pct: "Exchange charges (% of value)", gst_pct: "GST (% on brokerage)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
   risk: { in: "Default risk per trade (₹)", us: "Default risk per trade ($)" },
   fx: { markup_pct: "FX markup over the reference rate (%)", gst_pct_of_inr: "GST on conversion (% of the INR sent)", bank_charge_inr: "Bank / wire charge per top-up (₹)", payin_fee_usd: "Pay-in fee when under the free limit ($)", payin_free_from_usd: "Pay-in free from ($)", tcs_rate_pct: "TCS rate (%)", tcs_threshold_inr: "TCS threshold per financial year (₹)", fallback_rate: "Fallback USD/INR rate (if the daily rate is unavailable)" },
 };
@@ -786,7 +786,7 @@ function fillDialog(fl) {
   const calc = () => {
     $("l-fee").hidden = f.elements.recalc.checked;
     const q = +val(f, "qty"), p = +val(f, "price"); if (!(q > 0 && p > 0)) { $("brk").innerHTML = ""; return null; }
-    const side = isNew ? f.elements.side.value : fl.side, fee = PC.tradeFees(M, side, q, p, S.settings, dpOK());
+    const side = isNew ? f.elements.side.value : fl.side, fee = PC.tradeFees(M, side, q, p, S.settings, dpOK(), val(f, "date") || undefined);
     $("brk").innerHTML = `<div><span>Value</span><span>${money(q * p)}</span></div>` + Object.keys(fee).filter(k => k !== "total" && fee[k]).map(k => `<div><span>${k}</span><span>${money(fee[k])}</span></div>`).join("") + `<div class="tot"><span>Charges</span><span>${money(fee.total)}</span></div>`;
     return fee;
   };

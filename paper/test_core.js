@@ -10,7 +10,7 @@ const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${
 
 test("fee parity with the Python engine on 150 random cases", () => {
   const v = JSON.parse(fs.readFileSync(path.join(__dirname, "vectors.json"), "utf8"));
-  for (const c of v.cases) assert.deepStrictEqual(C.tradeFees(c.portfolio, c.side, c.qty, c.price, v.settings, c.dp), c.fees, JSON.stringify(c));
+  for (const c of v.cases) assert.deepStrictEqual(C.tradeFees(c.portfolio, c.side, c.qty, c.price, v.settings, c.dp, c.date || undefined), c.fees, JSON.stringify(c));
 });
 
 test("Dhan top-up screen: Rs 1,00,000 at 95.71 gives $1,042.95 (GST Rs 179, no pay-in fee)", () => {
@@ -19,8 +19,10 @@ test("Dhan top-up screen: Rs 1,00,000 at 95.71 gives $1,042.95 (GST Rs 179, no p
   close(r.effective_rate, 95.88, 0.006);
 });
 
-test("small top-up pays the $1 pay-in fee; overrides win", () => {
-  const r = C.fundCalc({ inr: 5000, rate: 96.12, settings: S });
+test("pay-in fee is zero by default (from Oct 2026); a configured fee applies below the free limit; overrides win", () => {
+  assert.strictEqual(C.fundCalc({ inr: 5000, rate: 96.12, settings: S }).payin_fee_usd, 0);
+  const S1 = JSON.parse(JSON.stringify(S)); S1.fx.payin_fee_usd = 1;
+  const r = C.fundCalc({ inr: 5000, rate: 96.12, settings: S1 });
   assert.strictEqual(r.gst, 8.95); assert.strictEqual(r.gross_usd, 51.93); assert.strictEqual(r.payin_fee_usd, 1); assert.strictEqual(r.net_usd, 50.93);
   const o = C.fundCalc({ inr: 5000, rate: 96.12, gst: 10, bank: 25, payin: 0, settings: S });
   assert.strictEqual(o.gross_usd, r2((5000 - 10 - 25) / 96.12)); assert.strictEqual(o.net_usd, o.gross_usd);

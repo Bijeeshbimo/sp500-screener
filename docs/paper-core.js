@@ -8,8 +8,8 @@
 
   const DEFAULT_SETTINGS = {
     in: { brokerage_pct: 0, stt_pct: 0.1, stamp_buy_pct: 0.015, exch_pct: 0.00297, sebi_pct: 0.0001, gst_pct: 18, dp_charge: 12.5, slippage_bps: 0 },
-    us: { brokerage_pct: 0.25, min_brokerage: 0.01, exch_pct: 0.005, gst_pct: 18, other_pct: 0, slippage_bps: 0 },
-    fx: { markup_pct: 1.0, gst_pct_of_inr: 0.179, bank_charge_inr: 0, payin_fee_usd: 1, payin_free_from_usd: 100,
+    us: { brokerage_pct: 0.10, legacy_brokerage_pct: 0.25, min_brokerage: 0.01, max_brokerage: 10, exch_pct: 0.005, gst_pct: 18, other_pct: 0, slippage_bps: 0 },
+    fx: { markup_pct: 1.0, gst_pct_of_inr: 0.179, bank_charge_inr: 0, payin_fee_usd: 0, payin_free_from_usd: 100,
           tcs_enabled: false, tcs_rate_pct: 20, tcs_threshold_inr: 1000000, fallback_rate: 95 },
     engine: { same_bar_priority: "stop" },
     risk: { in: 5000, us: 50 },
@@ -18,14 +18,20 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   function mergeSettings(saved) {
     const out = clone(DEFAULT_SETTINGS);
+    if (saved && saved.us && saved.us.legacy_brokerage_pct === undefined) {      // saved before the 26 Oct 2026 price cut: let the new defaults apply
+      saved = clone(saved);
+      if (saved.us.brokerage_pct === 0.25) delete saved.us.brokerage_pct;
+      if (saved.fx && saved.fx.payin_fee_usd === 1) delete saved.fx.payin_fee_usd;
+    }
     for (const g in saved || {}) if (out[g] && typeof saved[g] === "object") Object.assign(out[g], saved[g]);
     return out;
   }
 
+  const US_RATE_CHANGE = "2026-10-26";      // first session on Dhan's lower US brokerage; earlier fills keep the old rate
   const r2 = x => Math.floor(x * 100 + 0.5 + 1e-9) / 100;
 
   /* ------------------------------------------------------------- trade fees -- */
-  function tradeFees(portfolio, side, qty, price, settings, dpApplies) {
+  function tradeFees(portfolio, side, qty, price, settings, dpApplies, onDate) {
     if (dpApplies === undefined) dpApplies = true;
     const value = qty * price;
     let parts;
@@ -39,7 +45,8 @@
       parts = { brokerage, stt, exchange, sebi, stamp, gst, dp };
     } else {
       const c = settings.us;
-      const brokerage = Math.max(c.min_brokerage, Math.ceil(value * c.brokerage_pct / 100 * 100 - 1e-9) / 100);
+      const pct = onDate && onDate < US_RATE_CHANGE ? c.legacy_brokerage_pct : c.brokerage_pct;
+      const brokerage = Math.min(c.max_brokerage, Math.max(c.min_brokerage, Math.ceil(value * pct / 100 * 100 - 1e-9) / 100));
       parts = { brokerage, exchange: r2(value * c.exch_pct / 100), gst: r2(brokerage * c.gst_pct / 100), other: r2(value * c.other_pct / 100) };
     }
     let t = 0; for (const k in parts) t += parts[k];

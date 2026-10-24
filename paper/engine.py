@@ -123,7 +123,7 @@ def simulate(orders: list[dict], bars: dict[str, list[tuple]], cash: float, hold
                 continue
             qty = float(o["qty"])
             dp_applies = (o["symbol"], d) not in dp_done
-            fee = trade_fees(portfolio, o["side"], qty, px, settings, dp_applies)
+            fee = trade_fees(portfolio, o["side"], qty, px, settings, dp_applies, d)
             if o["side"] == "BUY":
                 cost = qty * px + fee["total"]
                 if cost > cash + 1e-9:

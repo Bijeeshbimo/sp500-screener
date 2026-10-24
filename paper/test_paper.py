@@ -30,9 +30,13 @@ def order(i, **kw):
 class Fees(unittest.TestCase):
     def test_us_brokerage_rounds_up_to_the_cent(self):
         # reported on the ValuePickr forum: a $25 order attracted $0.07
-        self.assertEqual(trade_fees("US", "BUY", 1, 25, S)["brokerage"], 0.07)
+        self.assertEqual(trade_fees("US", "BUY", 1, 25, S, True, "2026-10-01")["brokerage"], 0.07)
         self.assertEqual(trade_fees("US", "SELL", 0.001, 1, S)["total"], 0.01)      # minimum $0.01
-        self.assertEqual(trade_fees("US", "BUY", 100, 150, S)["total"], 45.0)
+        self.assertEqual(trade_fees("US", "BUY", 100, 150, S, True, "2026-10-01")["total"], 12.55)        # old 0.25% = $37.50, capped at $10, plus exchange and GST
+        self.assertEqual(trade_fees("US", "BUY", 100, 150, S, True, "2026-10-26")["brokerage"], 10.0)   # new 0.10% = 15.00, capped at $10
+        self.assertEqual(trade_fees("US", "BUY", 10, 100, S, True, "2026-10-26")["brokerage"], 1.0)
+        self.assertEqual(merged_settings({"us": {"brokerage_pct": 0.25}})["us"]["brokerage_pct"], 0.10)          # stale saved default is replaced
+        self.assertEqual(merged_settings({"us": {"brokerage_pct": 0.25, "legacy_brokerage_pct": 0.25}})["us"]["brokerage_pct"], 0.25)   # a deliberate setting is kept
 
     def test_india_delivery_buy_and_sell(self):
         b = trade_fees("IN", "BUY", 100, 500, S)
@@ -46,7 +50,7 @@ class Fees(unittest.TestCase):
     def test_parity_vectors_exist(self):
         v = json.loads((Path(__file__).parent / "vectors.json").read_text())
         for c in v["cases"]:
-            got = trade_fees(c["portfolio"], c["side"], c["qty"], c["price"], v["settings"], c["dp"])
+            got = trade_fees(c["portfolio"], c["side"], c["qty"], c["price"], v["settings"], c["dp"], c.get("date"))
             self.assertEqual(got, c["fees"])
 
 
