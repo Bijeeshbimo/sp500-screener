@@ -485,7 +485,7 @@ function posChart(p, stop, so) {
 }
 const addDays = (d, n) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10);
 function viewPos() {
-  const a = ACC, P = a.positions;
+  const a = ACC, P = [...a.positions].sort((x, y) => y.pnl - x.pnl);      // biggest absolute profit first; header clicks re-sort
   if (!P.length) return empty("No open positions.<br><br>" + `<button class="primary" data-act="neworder">New order</button>`);
   const rows = P.map(p => {
     const so = stopOrderFor(p.symbol), stop = so ? +so.price : p.stop, dist = stop != null && p.price ? (p.price - stop) / p.price * 100 : null;
