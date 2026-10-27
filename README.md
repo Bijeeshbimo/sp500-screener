@@ -121,6 +121,11 @@ The order engine (`paper/engine.py`) runs in the same daily workflow right after
 
 ---
 
+
+### Profit-booking playbook
+
+Tick "Manage this trade with the profit-booking playbook" on a buy order (Settings can tick it by default). 1R is the entry price minus your initial stop. The daily job then sells 30% at 3R and 20% at 6R, moves the stop to cost once price reaches 3R (from the next session), and sells the rest on the first close below the 20 EMA (at the next open). Every number is editable under Settings. The Dashboard replays the playbook on your closed buys and compares it with what you actually did. The rules live in `paper/playbook.py` and `docs/paper-core.js` (kept identical by `paper/playbook_vectors.json`).
+
 ## 🔧 Tweaking
 
 Everything lives near the top of `screener.py`:

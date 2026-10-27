@@ -101,3 +101,26 @@ test("insights: flags missing stops and a losing profit factor", () => {
 });
 
 console.log(`\n${n} tests passed`);
+
+test("playbook matches the Python implementation on 120 random price paths", () => {
+  const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "playbook_vectors.json"), "utf8"));
+  for (const c of cases) {
+    const got = C.playbookRun(c.bars, c.entry_date, c.entry_px, c.qty, c.cost_px, c.stop, c.cfg, c.india, c.stop_first);
+    assert.deepStrictEqual(got, c.result);
+  }
+});
+
+test("backtest replays the playbook on a closed buy and compares it with what was actually made", () => {
+  const S0 = C.mergeSettings({ us: { brokerage_pct: 0, min_brokerage: 0, exch_pct: 0, gst_pct: 0, legacy_brokerage_pct: 0 } });
+  const d = [], o = [], h = [], l = [], c = [];
+  for (let i = 0; i < 30; i++) { d.push("2026-09-" + String(i + 1).padStart(2, "0")); o.push(100); h.push(101); l.push(99); c.push(100); }
+  d.push("2026-10-01", "2026-10-02"); o.push(105, 126); h.push(131, 127); l.push(104, 99); c.push(128, 101);       // 3R hit, then back to cost
+  const fills = [
+    { id: "b", portfolio: "US", symbol: "ABC", yf: "ABC", side: "BUY", qty: 10, price: 100, date: "2026-09-30", fees_total: 0, stop_ref: 90 },
+    { id: "s", portfolio: "US", symbol: "ABC", yf: "ABC", side: "SELL", qty: 10, price: 104, date: "2026-10-02", fees_total: 0 }];
+  const cfg = { t1_r: 3, t1_pct: 30, t2_r: 6, t2_pct: 20, be_r: 3, ema_len: 20 };
+  const bt = C.playbookBacktest(fills, { ABC: { d, o, h, l, c } }, S0, [{ cfg }, { cfg: { ...cfg, t1_pct: 0, t2_pct: 0 } }]);
+  assert.strictEqual(bt.rows.length, 1);
+  assert.strictEqual(r2(bt.actual), 40); assert.strictEqual(r2(bt.totals[0]), 90); assert.strictEqual(r2(bt.totals[1]), 0);
+  assert.strictEqual(C.playbookBacktest(fills.slice(0, 1), { ABC: { d, o, h, l, c } }, S0, [{ cfg }]).rows.length, 0);     // still open: not compared
+});

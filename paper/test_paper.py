@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine import FirestoreStore, account_state, run_user, simulate, trigger_price  # noqa: E402
 from fees import merged_settings, trade_fees  # noqa: E402
+from playbook import playbook_run  # noqa: E402
 
 S = merged_settings({})
 
@@ -301,6 +302,72 @@ class FirestoreAdapter(unittest.TestCase):
         self.db.document.assert_called_with("users/u1/fills/auto-o9"); self.db.document.return_value.create.assert_called_with({"x": 1})
         self.db.document.return_value.create.side_effect = AlreadyExists("exists")
         self.assertFalse(self.store.create_fill("u1", "o9", {"x": 1}))
+
+
+class PlaybookRules(unittest.TestCase):
+    CFG = {"t1_r": 3, "t1_pct": 30, "t2_r": 6, "t2_pct": 20, "be_r": 3, "ema_len": 5}
+
+    def run_pb(self, days, **kw):
+        bars = [("2026-09-%02d" % (i + 1), 100, 101, 99, 100) for i in range(8)] + days      # eight flat sessions warm up the EMA
+        a = dict(entry_date="2026-09-08", entry_px=100.0, qty=10.0, cost_px=100.3, stop=90.0, cfg=self.CFG, india=False)
+        a.update(kw)
+        return playbook_run(bars, **a)
+
+    def test_partials_then_stop_to_cost(self):
+        r = self.run_pb([("2026-09-09", 105, 131, 104, 128), ("2026-09-10", 126, 127, 100, 101)])
+        self.assertEqual([(e["reason"], e["qty"], e["price"]) for e in r["events"]], [("t1", 3.0, 130.0), ("stop", 7.0, 100.3)])
+        self.assertTrue(r["state"]["finished"])
+
+    def test_gap_up_fills_at_the_open_and_both_targets_can_fill(self):
+        r = self.run_pb([("2026-09-09", 165, 170, 164, 168)])
+        self.assertEqual([(e["reason"], e["qty"], e["price"]) for e in r["events"]], [("t1", 3.0, 165.0), ("t2", 2.0, 165.0)])
+        self.assertEqual(r["state"]["remaining"], 5.0)
+        self.assertTrue(r["state"]["be"])
+
+    def test_stop_beats_target_on_the_same_bar_unless_told_otherwise(self):
+        day = [("2026-09-09", 100, 131, 89, 100)]
+        self.assertEqual([e["reason"] for e in self.run_pb(day)["events"]], ["stop"])
+        self.assertEqual([e["reason"] for e in self.run_pb(day, stop_first=False)["events"]], ["t1", "stop"])
+
+    def test_gap_through_the_stop_fills_at_the_open(self):
+        r = self.run_pb([("2026-09-09", 85, 86, 84, 85)])
+        self.assertEqual((r["events"][0]["reason"], r["events"][0]["price"]), ("stop", 85.0))
+
+    def test_ema_exit_after_breakeven_sells_next_open(self):
+        up = [("2026-09-%02d" % (9 + i), 130 + i, 132 + i, 129 + i, 131 + i) for i in range(3)]          # rises through 3R
+        r = self.run_pb(up + [("2026-09-12", 120, 121, 118, 119), ("2026-09-13", 117, 118, 110, 112)])    # closes under the 5 EMA
+        self.assertEqual([e["reason"] for e in r["events"]], ["t1", "ema"])
+        self.assertEqual(r["events"][-1]["date"], "2026-09-13")
+        self.assertEqual(r["events"][-1]["price"], 117.0)
+
+    def test_india_rounds_the_slices_to_whole_shares(self):
+        r = self.run_pb([("2026-09-09", 165, 170, 164, 168)], india=True, qty=7.0)
+        self.assertEqual([(e["reason"], e["qty"]) for e in r["events"]], [("t1", 2.0), ("t2", 1.0)])      # 2.1 -> 2, 1.4 -> 1
+
+    def test_no_valid_risk_means_no_playbook(self):
+        self.assertIsNone(self.run_pb([], stop=100.0))
+
+
+class EnginePlaybook(unittest.TestCase):
+    def test_entry_with_a_playbook_sells_in_stages_without_duplicates(self):
+        st = FakeStore()
+        st.put("u1", "ledger", "l1", {"portfolio": "IN", "kind": "deposit", "date": "2026-10-01", "amount": 100000.0, "inr": 100000.0})
+        pb = {"t1_r": 3, "t1_pct": 30, "t2_r": 6, "t2_pct": 20, "be_r": 3, "ema_len": 20, "stop": 90}
+        st.put("u1", "orders", "o1", order("o1", stop_ref=90, pb=pb))
+        st.d[("u1", "orders")]["o1"].pop("id", None)
+        days = [("2026-10-02", 100, 102, 99, 101), ("2026-10-03", 105, 131, 104, 128), ("2026-10-06", 126, 127, 100, 101)]
+        run_user(st, "u1", stub_fetch(days[:2]))
+        fills = st.d[("u1", "fills")]
+        self.assertEqual(sorted(fills), ["auto-o1", "auto-o1-pb-t1"])
+        t1 = fills["auto-o1-pb-t1"]
+        self.assertEqual((t1["side"], t1["qty"], t1["price"], t1["source"], t1["date"]), ("SELL", 3.0, 130.0, "playbook", "2026-10-03"))
+        self.assertEqual(st.d[("u1", "orders")]["o1"]["pb_state"]["be"], True)
+        run_user(st, "u1", stub_fetch(days[:2]))
+        self.assertEqual(len(st.d[("u1", "fills")]), 2)                                       # rerun adds nothing
+        run_user(st, "u1", stub_fetch(days))
+        self.assertEqual(sorted(st.d[("u1", "fills")]), ["auto-o1", "auto-o1-pb-stop", "auto-o1-pb-t1"])
+        self.assertEqual(st.d[("u1", "fills")]["auto-o1-pb-stop"]["qty"], 7.0)
+        self.assertTrue(st.d[("u1", "orders")]["o1"]["pb_state"]["finished"])
 
 
 if __name__ == "__main__":

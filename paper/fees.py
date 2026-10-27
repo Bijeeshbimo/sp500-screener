@@ -20,6 +20,7 @@ DEFAULT_SETTINGS = {
            "payin_free_from_usd": 100.0, "tcs_enabled": False, "tcs_rate_pct": 20.0,
            "tcs_threshold_inr": 1000000.0, "fallback_rate": 95.0},
     "engine": {"same_bar_priority": "stop"},
+    "playbook": {"t1_r": 3.0, "t1_pct": 30.0, "t2_r": 6.0, "t2_pct": 20.0, "be_r": 3.0, "ema_len": 20, "default_on": True},
 }
 
 

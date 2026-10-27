@@ -320,8 +320,8 @@ function render() {
     if (!tr || !$("view").contains(tr) || (tr.nextElementSibling && tr.nextElementSibling.classList.contains("chrow"))) { box.hidden = true; return; }
     const p = ACC && ACC.positions.find(x => x.symbol === tr.dataset.sym);
     if (!p || !hasCandles(p)) { box.hidden = true; return; }
-    const so = stopOrderFor(p.symbol), stop = so ? +so.price : p.stop;
-    box.innerHTML = `<div class="hd"><b>${esc(p.symbol)}</b> &middot; last close ${money(p.price)}</div>` + candleSvg(p, stop, so);
+    const so = stopOrderFor(p.symbol), pbo = pbFor(p.symbol), stop = pbo ? pbo.pb_state.stop : so ? +so.price : p.stop;
+    box.innerHTML = `<div class="hd"><b>${esc(p.symbol)}</b> &middot; last close ${money(p.price)}</div>` + candleSvg(p, stop, so || pbo);
     box.hidden = false; place(e.clientX, e.clientY);
   });
   document.addEventListener("mousemove", e => { if (!box.hidden) place(e.clientX, e.clientY); });
@@ -438,15 +438,35 @@ function viewDash() {
   </div></div>
   <h2>Observations</h2><div class="card">${ins.length ? `<ul class="ins">${ins.map(i => `<li class="${i.level}">${esc(i.text)}</li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Nothing to report yet.</p>'}
     <p class="hint" style="margin:10px 0 0">Rule-based checks on your own numbers, not predictions.</p></div>
+  ${viewBacktest()}
   ${tags.length && a.trades.length ? `<h2>By tag</h2><div class="tw"><table><thead><tr><th>Tag</th><th>Trades</th><th>Win rate</th><th>Avg / trade</th><th>Total P&amp;L</th><th>Avg days</th></tr></thead><tbody>${tags.map(t => `<tr><td>${esc(t.tag)}</td><td>${t.n}</td><td>${t.winRate.toFixed(0)}%</td><td class="${sgn(t.expectancy)}">${money(t.expectancy)}</td><td class="${sgn(t.total)}">${money(t.total)}</td><td>${((t.holdWin || 0) * t.wins + (t.holdLoss || 0) * t.losses) / ((t.wins + t.losses) || 1) | 0}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+}
+
+/* ------------------------------------------------------- playbook backtest -- */
+function viewBacktest() {
+  const pb = S.settings.playbook, cfg = { t1_r: +pb.t1_r, t1_pct: +pb.t1_pct, t2_r: +pb.t2_r, t2_pct: +pb.t2_pct, be_r: +pb.be_r, ema_len: +pb.ema_len };
+  const variants = [{ name: `Your playbook (${cfg.t1_pct}% at ${cfg.t1_r}R, ${cfg.t2_pct}% at ${cfg.t2_r}R, cost at ${cfg.be_r}R)`, cfg },
+    { name: `Same, but stop to cost at ${cfg.be_r === 2 ? 3 : 2}R`, cfg: { ...cfg, be_r: cfg.be_r === 2 ? 3 : 2 } },
+    { name: "No partial sells (stop to cost, then the EMA exit)", cfg: { ...cfg, t1_pct: 0, t2_pct: 0 } }];
+  const bt = PC.playbookBacktest(S.fills.filter(f => f.portfolio === M), CANDLES, S.settings, variants);
+  const head = '<h2>Playbook versus what you did</h2>';
+  if (!bt.rows.length) return head + `<div class="card"><p class="hint" style="margin:0">Nothing to compare yet. This replays the playbook on your <b>closed</b> buys that had a planned stop, using the daily price history the daily job saves. ${bt.skipped ? bt.skipped + " closed buy(s) were left out (no planned stop, or no price history yet)." : ""}</p></div>`;
+  const cell = v => `<td class="${sgn(v)}">${money(v)}</td>`;
+  return head + `<div class="tw"><table><thead><tr><th>Approach</th><th>Total P&amp;L</th><th>Versus yours</th></tr></thead><tbody>
+    <tr><td>What you actually did</td>${cell(bt.actual)}<td></td></tr>
+    ${variants.map((v, i) => `<tr><td>${esc(v.name)}</td>${cell(bt.totals[i])}${cell(bt.totals[i] - bt.actual)}</tr>`).join("")}</tbody></table></div>
+    <div class="tw"><table><thead><tr><th class="l">Entry</th><th>Symbol</th><th>You</th><th>Playbook</th><th>Cost at ${cfg.be_r === 2 ? 3 : 2}R</th><th>No partials</th></tr></thead><tbody>
+    ${bt.rows.map(r => `<tr><td class="l">${r.date}</td><td>${esc(r.symbol)}</td>${cell(r.actual)}${r.vals.map(cell).join("")}</tr>`).join("")}</tbody></table></div>
+    <p class="hint">${bt.rows.length} closed buy(s) replayed on daily candles from each entry, using the same rules the daily job applies. Anything still unsold at the end is valued at the latest close. ${bt.skipped ? bt.skipped + " more were left out (no planned stop or no price history). " : ""}A month of trades is a small sample, so treat this as a sanity check on the rules, not proof that one is better. Daily candles cannot show what happened inside a day.</p>`;
 }
 
 /* --------------------------------------------------------------- positions -- */
 const OPENPOS = new Set();
 const tvUrl = sym => "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent((M === "IN" ? "NSE:" + sym.replace(/[&-]/g, "_") : sym.replace(/-/g, ".")));
 const targetOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "LIMIT" && (o.status === "pending" || o.status === "waiting"));
+const pbFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.pb && o.pb_state && !o.pb_state.finished);
 function posLevels(p, stop, so) {
-  const t = targetOrderFor(p.symbol);
+  const pbo = pbFor(p.symbol), nt = pbo && pbo.pb_state.targets[0], t = nt ? { price: nt.price } : targetOrderFor(p.symbol);
   return [["Entry", "#4f8cff", p.avg], stop != null ? [so ? "Stop-loss" : "Planned stop", "#e5534b", +stop] : null, t ? ["Target", "#2ea043", +t.price] : null].filter(Boolean);
 }
 /* Candlestick preview: last 126 sessions, 20/50 EMA, with entry (blue), stop-loss (red) and target (green) lines. */
@@ -488,12 +508,12 @@ function viewPos() {
   const a = ACC, P = [...a.positions].sort((x, y) => y.pnl - x.pnl);      // biggest absolute profit first; header clicks re-sort
   if (!P.length) return empty("No open positions.<br><br>" + `<button class="primary" data-act="neworder">New order</button>`);
   const rows = P.map(p => {
-    const so = stopOrderFor(p.symbol), stop = so ? +so.price : p.stop, dist = stop != null && p.price ? (p.price - stop) / p.price * 100 : null;
+    const so = stopOrderFor(p.symbol), pbo = pbFor(p.symbol), pbs = pbo && pbo.pb_state, stop = pbs ? pbs.stop : so ? +so.price : p.stop, dist = stop != null && p.price ? (p.price - stop) / p.price * 100 : null;
     const open = OPENPOS.has(p.symbol);
     return `<tr class="prow" data-act="togglepos" data-sym="${esc(p.symbol)}"><td>${esc(p.symbol)} <a href="${tvUrl(p.symbol)}" target="_blank" rel="noopener" data-act="none" title="Open in TradingView">&#8599;</a>${p.tag ? `<span class="nm">${esc(p.tag)}</span>` : ""}</td><td>${num(p.qty)}</td><td>${money(p.avg)}</td><td>${money(p.price)}<span class="nm">${p.priceDate || "no price yet"}</span></td>
       <td>${money(p.value)}</td><td class="${sgn(p.pnl)}">${money(p.pnl)}</td><td class="${sgn(p.pct)}">${pct(p.pct)}</td>
-      <td>${stop != null ? money(stop) + `<span class="nm">${so ? "stop order" : "planned"}${dist != null ? ` · ${dist.toFixed(1)}% below` : ""}</span>` : '<span class="mut">none</span>'}</td><td>${p.days}</td>
-      <td><button class="sm" data-act="sell" data-sym="${esc(p.symbol)}">Sell</button><button class="sm" data-act="setstop" data-sym="${esc(p.symbol)}">${so ? "Move stop" : "Set stop"}</button></td></tr>${open ? `<tr class="chrow"><td colspan="10">${posChart(p, stop, so)}</td></tr>` : ""}`;
+      <td>${stop != null ? money(stop) + `<span class="nm">${pbs ? "playbook" + (pbs.be ? " \u00b7 at cost" : "") : so ? "stop order" : "planned"}${dist != null ? ` · ${dist.toFixed(1)}% below` : ""}</span>` : '<span class="mut">none</span>'}${pbs && pbs.ema != null ? `<span class="nm">${pbs.exit_next ? "sells at the next open" : "exit on a close below " + money(pbs.ema)}</span>` : ""}</td><td>${p.days}</td>
+      <td><button class="sm" data-act="sell" data-sym="${esc(p.symbol)}">Sell</button><button class="sm" data-act="setstop" data-sym="${esc(p.symbol)}">${so ? "Move stop" : "Set stop"}</button></td></tr>${open ? `<tr class="chrow"><td colspan="10">${posChart(p, stop, so || pbs)}</td></tr>` : ""}`;
   }).join("");
   return `<div class="bar"><button class="primary" data-act="neworder">New order</button></div>
   <div class="tw"><table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last close</th><th>Value</th><th>P&amp;L</th><th>%</th><th>Stop</th><th>Days</th><th></th></tr></thead><tbody>${rows}</tbody>
@@ -509,7 +529,7 @@ function viewOrd() {
   const rows = list.map(o => {
     const live = o.status === "pending" || o.status === "waiting";
     const px = o.type === "MARKET" ? "at open" : (o.type === "STOP" ? "stop " : "limit ") + money(o.price);
-    return `<tr><td class="l">${o.created_at ? o.created_at.slice(0, 10) : ""}</td><td>${esc(o.symbol)}${o.parent_id ? '<span class="nm">bracket leg</span>' : ""}</td><td class="${o.side === "BUY" ? "up" : "dn"}">${o.side}</td><td>${num(o.qty)}</td><td>${px}</td><td>${BLK.items[o.id] != null ? money(BLK.items[o.id]) : "\u2013"}</td>
+    return `<tr><td class="l">${o.created_at ? o.created_at.slice(0, 10) : ""}</td><td>${esc(o.symbol)}${o.parent_id ? '<span class="nm">bracket leg</span>' : ""}${o.pb ? '<span class="nm">playbook</span>' : ""}</td><td class="${o.side === "BUY" ? "up" : "dn"}">${o.side}</td><td>${num(o.qty)}</td><td>${px}</td><td>${BLK.items[o.id] != null ? money(BLK.items[o.id]) : "\u2013"}</td>
       <td>after ${esc(o.after_date)}${o.expiry ? `<span class="nm">expires ${esc(o.expiry)}</span>` : ""}</td><td>${esc(o.status)}${o.status_note ? `<span class="nm">${esc(o.status_note)}</span>` : ""}</td>
       <td>${live ? `<button class="sm" data-act="editorder" data-id="${o.id}">Edit</button><button class="sm danger" data-act="cancelorder" data-id="${o.id}">Cancel</button>` : `<button class="sm danger" data-act="delorder" data-id="${o.id}">Delete</button>`}</td></tr>`;
   }).join("");
@@ -562,16 +582,18 @@ function viewFund() {
 const SLAB = {
   in: { brokerage_pct: "Brokerage (% of value)", stt_pct: "STT (% of value, buy and sell)", stamp_buy_pct: "Stamp duty (% of value, buy)", exch_pct: "Exchange charges (% of value)", sebi_pct: "SEBI fee (% of value)", gst_pct: "GST (% on brokerage, exchange and SEBI)", dp_charge: "DP charge per stock per sell day (₹, before GST)", slippage_bps: "Slippage on market/stop fills (basis points)" },
   us: { brokerage_pct: "Brokerage (% of value, from 26 Oct 2026)", legacy_brokerage_pct: "Brokerage before 26 Oct 2026 (% of value)", min_brokerage: "Minimum brokerage per order ($)", max_brokerage: "Maximum brokerage per order ($)", exch_pct: "Exchange charges (% of value)", gst_pct: "GST (% on brokerage)", other_pct: "Other regulatory fees (% of value)", slippage_bps: "Slippage on market/stop fills (basis points)" },
+  playbook: { t1_r: "First target (R multiple)", t1_pct: "Sell at the first target (% of the position)", t2_r: "Second target (R multiple)", t2_pct: "Sell at the second target (% of the position)", be_r: "Move the stop to cost when price reaches (R)", ema_len: "Sell the rest on a close below this EMA (days)" },
   risk: { in: "Default risk per trade (₹)", us: "Default risk per trade ($)" },
   fx: { markup_pct: "FX markup over the reference rate (%)", gst_pct_of_inr: "GST on conversion (% of the INR sent)", bank_charge_inr: "Bank / wire charge per top-up (₹)", payin_fee_usd: "Pay-in fee when under the free limit ($)", payin_free_from_usd: "Pay-in free from ($)", tcs_rate_pct: "TCS rate (%)", tcs_threshold_inr: "TCS threshold per financial year (₹)", fallback_rate: "Fallback USD/INR rate (if the daily rate is unavailable)" },
 };
-const GTITLE = { in: "India trades (Dhan equity delivery)", us: "US trades (Dhan US Stocks)", fx: "Adding US funds (INR to USD)", risk: "Position sizing" };
+const GTITLE = { in: "India trades (Dhan equity delivery)", us: "US trades (Dhan US Stocks)", fx: "Adding US funds (INR to USD)", risk: "Position sizing", playbook: "Profit-booking playbook" };
 function viewSet() {
   const st = S.settings;
   const grp = g => `<h2>${GTITLE[g]}</h2><div class="card"><div class="grid">${Object.keys(SLAB[g]).map(k => `<label>${SLAB[g][k]}<input data-s="${g}.${k}" type="number" step="any" value="${st[g][k]}"></label>`).join("")}</div>
+    ${g === "playbook" ? `<p style="margin:10px 0 0"><label class="chk"><input type="checkbox" data-s="playbook.default_on" ${st.playbook.default_on ? "checked" : ""}>Tick the playbook by default on new buy orders</label></p><p class="hint" style="margin:8px 0 0">1R is your entry price minus your initial stop. After the entry fills, the daily job sells the first slice at the first target and the second slice at the second target, moves the stop to your cost once price reaches the stop-to-cost level (it applies from the next session), and then sells everything left on the first close below the EMA (at the next open). Slices are fractional for US shares and whole shares for India.</p>` : ""}
     ${g === "fx" ? `<p style="margin:10px 0 0"><label class="chk"><input type="checkbox" data-s="fx.tcs_enabled" ${st.fx.tcs_enabled ? "checked" : ""}>Add TCS to new US top-ups when over the threshold</label></p>` : ""}</div>`;
   return `<p class="hint">Starting values follow Dhan&rsquo;s published pricing. Past trades and top-ups keep the charges they were saved with; changing a rate only affects new ones (or a fill you edit).</p>
-  ${grp("in")}${grp("us")}${grp("fx")}${grp("risk")}
+  ${grp("playbook")}${grp("in")}${grp("us")}${grp("fx")}${grp("risk")}
   <h2>Order engine</h2><div class="card"><label>If a stop and a target could both trigger in the same session, assume the<select data-s="engine.same_bar_priority"><option value="stop"${st.engine.same_bar_priority === "stop" ? " selected" : ""}>stop hit first (conservative)</option><option value="target"${st.engine.same_bar_priority === "target" ? " selected" : ""}>target hit first</option></select></label></div>
   <div class="bar"><button class="primary" data-act="savesettings">Save settings</button><button data-act="resetsettings">Reset to defaults</button><button data-act="export">Download a backup (JSON)</button></div>`;
 }
@@ -684,14 +706,18 @@ function orderDialog(pref) {
       <label>Fill from sessions after<input name="after" type="date" value="${lastSession()}"></label>
       <label>Expires (optional)<input name="expiry" type="date"></label>
       <label>Tag (optional)<input name="tag" list="taglist" value="${esc(pref.tag || "")}"><datalist id="taglist">${[...new Set(S.fills.concat(S.orders).map(x => x.tag).filter(Boolean))].map(t => `<option value="${esc(t)}">`).join("")}</datalist></label></div>
-    <div id="buyonly"><div class="grid"><label>Planned stop (for R-multiples; follows the bracket stop-loss)<input name="stopref" type="number" step="any" value="${pref.stop || ""}"></label>
-      <label>Bracket: stop-loss price<input name="bstop" type="number" step="any" placeholder="optional"></label>
-      <label>Bracket: target price<input name="btgt" type="number" step="any" placeholder="optional"></label></div></div>
+    <div id="buyonly"><label class="chk" style="display:block;margin:6px 0 2px"><input type="checkbox" name="pb" ${(S.settings.playbook || {}).default_on ? "checked" : ""}>Manage this trade with the profit-booking playbook</label><p class="hint" id="pbinfo" style="margin:0 0 8px"></p><div class="grid"><label>Planned stop (for R-multiples; follows the bracket stop-loss)<input name="stopref" type="number" step="any" value="${pref.stop || ""}"></label>
+      <label id="l-bstop">Bracket: stop-loss price<input name="bstop" type="number" step="any" placeholder="optional"></label>
+      <label id="l-btgt">Bracket: target price<input name="btgt" type="number" step="any" placeholder="optional"></label></div></div>
     <label>Note<input name="note" value="${esc(pref.note || "")}"></label>
     <p class="hint" id="rinfo" style="margin:10px 0 0"></p><p class="hint" id="est" style="margin:6px 0 0"></p>${acts("Place order")}`);
   const sync = () => {
     $("l-price").hidden = f.elements.type.value === "MARKET";
     $("buyonly").hidden = f.elements.side.value !== "BUY"; $("l-risk").hidden = f.elements.side.value !== "BUY";
+    const pbOn = f.elements.side.value === "BUY" && f.elements.pb.checked, pbc = S.settings.playbook;
+    $("l-btgt").hidden = pbOn; $("l-bstop").firstChild.textContent = pbOn ? "Initial stop-loss (defines 1R)" : "Bracket: stop-loss price";
+    { const e = f.elements, ep = e.type.value === "MARKET" ? refPrice(val(f, "sym").toUpperCase()) : +val(f, "price"), st = +val(f, "bstop") || +val(f, "stopref"), R = ep - st;
+      $("pbinfo").textContent = !pbOn ? "" : ep > 0 && st > 0 && R > 0 ? `1R = ${money(R)}. Sells ${pbc.t1_pct}% at ${money(ep + pbc.t1_r * R)} (${pbc.t1_r}R) and ${pbc.t2_pct}% at ${money(ep + pbc.t2_r * R)} (${pbc.t2_r}R); stop to cost at ${pbc.be_r}R; the rest goes on a close below the ${pbc.ema_len} EMA.` : "Enter the entry price and an initial stop-loss below it."; }
     const sym = val(f, "sym").toUpperCase(), q = +val(f, "qty") || 0, px = +val(f, "price") || refPrice(sym), s = (SYMS[M] || []).find(x => x.sym === sym);
     let t = s ? `${esc(s.name)} · last screened close ${money(s.close)}. ` : "";
     if (px && q) { const fee = PC.tradeFees(M, f.elements.side.value, q, px, S.settings, true); t += `About ${money(q * px)} plus ${money(fee.total)} charges. Available funds: ${money(avail())}${BLK.total ? ` (${money(BLK.total)} blocked on pending orders)` : ""}.`; }
@@ -723,11 +749,17 @@ function orderDialog(pref) {
   f.onsubmit = async e => {
     e.preventDefault();
     const sym = val(f, "sym").toUpperCase().replace(/\.NS$/, ""), side = f.elements.side.value, type = f.elements.type.value, qty = nval(f, "qty"), price = nval(f, "price");
-    const bstop = side === "BUY" ? nval(f, "bstop") : null, btgt = side === "BUY" ? nval(f, "btgt") : null;
+    const pbOn = side === "BUY" && f.elements.pb.checked;
+    const bstop = side === "BUY" ? nval(f, "bstop") : null, btgt = side === "BUY" && !pbOn ? nval(f, "btgt") : null;
+    const pbStop = pbOn ? (bstop ?? nval(f, "stopref")) : null;
     if (!sym) return err(f, "Enter a symbol."); if (!(qty > 0)) return err(f, "Enter a quantity.");
     if (M === "IN" && !Number.isInteger(qty)) return err(f, "Indian shares trade in whole numbers.");
     if (type !== "MARKET" && !(price > 0)) return err(f, "Enter a price for a limit or stop order.");
     if (!val(f, "after")) return err(f, "Pick the date after which the order can fill.");
+    if (pbOn) {
+      if (!(pbStop > 0)) return err(f, "The playbook needs an initial stop-loss: it defines 1R.");
+      const ep = type === "MARKET" ? refPrice(sym) : price; if (ep > 0 && pbStop >= ep) return err(f, "The stop-loss must be below your entry price.");
+    }
     if (bstop != null && btgt != null && btgt <= bstop) return err(f, "The target must be above the stop-loss.");
     if (type !== "MARKET" && bstop != null && bstop >= price) return err(f, "The stop-loss must be below your entry price.");
     if (side === "BUY") {            // a broker sets the money aside when the order is placed
@@ -736,9 +768,10 @@ function orderDialog(pref) {
     }
     const base = { portfolio: M, symbol: sym, yf: toYf(sym, M), qty, after_date: val(f, "after"), expiry: val(f, "expiry") || null, tag: val(f, "tag") || null, note: val(f, "note") || null };
     await guard(f, async () => {
-      const parent = await STORE.insert("orders", { ...base, side, type, price: type === "MARKET" ? null : price, oco_group: null, parent_id: null, stop_ref: side === "BUY" ? (nval(f, "stopref") ?? bstop) : null, status: "pending" });
+      const parent = await STORE.insert("orders", { ...base, side, type, price: type === "MARKET" ? null : price, oco_group: null, parent_id: null, stop_ref: side === "BUY" ? (pbOn ? pbStop : (nval(f, "stopref") ?? bstop)) : null, status: "pending",
+        ...(pbOn ? { pb: { ...["t1_r", "t1_pct", "t2_r", "t2_pct", "be_r", "ema_len"].reduce((o, k) => (o[k] = +S.settings.playbook[k], o), {}), stop: pbStop } } : {}) });
       const g = bstop != null && btgt != null ? uuid() : null;
-      if (bstop != null) await STORE.insert("orders", { ...base, side: "SELL", type: "STOP", price: bstop, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
+      if (bstop != null && !pbOn) await STORE.insert("orders", { ...base, side: "SELL", type: "STOP", price: bstop, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
       if (btgt != null) await STORE.insert("orders", { ...base, side: "SELL", type: "LIMIT", price: btgt, oco_group: g, parent_id: parent.id, stop_ref: null, status: "waiting", expiry: null });
       closeDlg(); VIEW = "ord"; OFILTER = "open"; ls.set("paper-v", VIEW); toast("Order placed. It fills after the next market close.");
     });

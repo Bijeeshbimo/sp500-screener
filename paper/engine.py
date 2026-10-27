@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # repo root, for screener.py
 from fees import merged_settings, r2, trade_fees  # noqa: E402
+from playbook import playbook_run  # noqa: E402
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
 BENCH = {"IN": "^NSEI", "US": "^GSPC"}
@@ -299,6 +300,7 @@ def run_user(store, uid: str, fetch=None) -> dict:
                  "l": [round(b[3], 4) for b in tail], "c": [round(b[4], 4) for b in tail]}
         store.put_prices(uid, t, [b[0] for b in rows], [round(b[4], 4) for b in rows], chart)
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    new_fills: list[dict] = []
     for p in ("IN", "US"):
         po = [o for o in o_u if o["portfolio"] == p]
         if not po:
@@ -314,7 +316,66 @@ def run_user(store, uid: str, fetch=None) -> dict:
                 store.patch_order(uid, o["id"], {"status_note": f"no price data found for {o['yf']}"})
         summary["fills"] += len(res["fills"]); summary["updates"] += len(res["updates"])
         print(f"{p}: {len(res['fills'])} fill(s), {len(res['updates'])} order update(s)")
+        new_fills.extend({**f, "id": f"auto-{f['order_id']}"} for f in res["fills"])
+    if any(o.get("pb") for o in orders):
+        made = run_playbooks(store, uid, orders, fills + new_fills, all_bars, ledger, settings, now)
+        summary["fills"] += made
+        if made:
+            print(f"playbook: {made} sell(s)")
     return summary
+
+
+PB_LABEL = {"t1": "first profit target", "t2": "second profit target", "stop": "stop-loss", "ema": "close below the EMA"}
+
+
+def run_playbooks(store, uid: str, orders: list[dict], fills: list[dict], all_bars: dict, ledger: list[dict],
+                  settings: dict, now: str) -> int:
+    """Apply the profit-booking playbook to every filled entry order that carries one. The whole history is
+    replayed every run and each sell has a fixed id, so an earlier run's sells are never duplicated."""
+    made = 0
+    held: dict[tuple, float] = defaultdict(float)
+    dp_done: set = set()
+    for f in fills:
+        held[(f["portfolio"], f["symbol"])] += float(f["qty"]) if f["side"] == "BUY" else -float(f["qty"])
+        if f["side"] == "SELL" and (f.get("fees") or {}).get("dp"):
+            dp_done.add((f["symbol"], f["date"]))
+    have = {f.get("pb_key") for f in fills if f.get("pb_key")}
+    stop_first = settings["engine"].get("same_bar_priority", "stop") == "stop"
+    for o in orders:
+        pb = o.get("pb")
+        if not pb or o["side"] != "BUY":
+            continue
+        entry = next((f for f in fills if f.get("order_id") == o["id"] and f["side"] == "BUY"), None)
+        bars = all_bars.get(o["yf"])
+        if not entry or not bars:
+            continue
+        q, px = float(entry["qty"]), float(entry["price"])
+        india = o["portfolio"] == "IN"
+        res = playbook_run(bars, entry["date"], px, q, (px * q + float(entry.get("fees_total") or 0)) / q, float(pb["stop"]), pb, india, stop_first)
+        if not res:
+            continue
+        for ev in res["events"]:
+            key = f"{o['id']}:{ev['reason']}"
+            if key in have:
+                continue
+            qty = min(ev["qty"], held[(o["portfolio"], o["symbol"])])
+            if qty <= 1e-9:
+                continue
+            dp_applies = (o["symbol"], ev["date"]) not in dp_done
+            fee = trade_fees(o["portfolio"], "SELL", qty, ev["price"], settings, dp_applies, ev["date"])
+            if fee.get("dp"):
+                dp_done.add((o["symbol"], ev["date"]))
+            fill = {"order_id": o["id"], "portfolio": o["portfolio"], "symbol": o["symbol"], "yf": o["yf"], "side": "SELL",
+                    "qty": qty, "price": ev["price"], "date": ev["date"], "fees": fee, "fees_total": fee["total"],
+                    "source": "playbook", "stop_ref": None, "tag": o.get("tag"), "pb_key": key,
+                    "note": "Playbook: " + PB_LABEL.get(ev["reason"], ev["reason"]), "created_at": now}
+            if store.create_fill(uid, f"{o['id']}-pb-{ev['reason']}", fill):
+                held[(o["portfolio"], o["symbol"])] -= qty
+                have.add(key)
+                made += 1
+        if res["state"] != o.get("pb_state"):
+            store.patch_order(uid, o["id"], {"pb_state": res["state"]})
+    return made
 
 
 def main() -> int:

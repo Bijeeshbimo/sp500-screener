@@ -13,6 +13,7 @@
           tcs_enabled: false, tcs_rate_pct: 20, tcs_threshold_inr: 1000000, fallback_rate: 95 },
     engine: { same_bar_priority: "stop" },
     risk: { in: 5000, us: 50 },
+    playbook: { t1_r: 3, t1_pct: 30, t2_r: 6, t2_pct: 20, be_r: 3, ema_len: 20, default_on: true },
   };
 
   const clone = o => JSON.parse(JSON.stringify(o));
@@ -259,5 +260,81 @@
     return out;
   }
 
-  return { DEFAULT_SETTINGS, mergeSettings, r2, tradeFees, fyOf, defaultRate, fundCalc, buildAccount, tradeStats, byTag, insights };
+
+  /* Profit-booking playbook (mirrors paper/playbook.py; see the notes there). 1R = entry - initial stop. */
+  const r4 = x => Math.floor(x * 1e4 + 0.5 + 1e-9) / 1e4;
+  function emaSeries(closes, n) {
+    const out = closes.map(() => null); n = Math.floor(n);
+    if (n < 1 || closes.length < n) return out;
+    const k = 2 / (n + 1); let e = 0;
+    for (let i = 0; i < n; i++) e += closes[i]; e /= n; out[n - 1] = e;
+    for (let i = n; i < closes.length; i++) { e = closes[i] * k + e * (1 - k); out[i] = e; }
+    return out;
+  }
+  const shareAmount = (x, india) => india ? Math.floor(x + 0.5 + 1e-9) : r4(x);
+  function playbookRun(bars, entryDate, entryPx, qty, costPx, stop, cfg, india, stopFirst) {
+    if (stopFirst === undefined) stopFirst = true;
+    const R = entryPx - stop;
+    if (!(R > 0 && qty > 0)) return null;
+    const targets = [["t1", entryPx + cfg.t1_r * R, cfg.t1_pct], ["t2", entryPx + cfg.t2_r * R, cfg.t2_pct]];
+    const beLevel = entryPx + cfg.be_r * R, ema = emaSeries(bars.map(b => b[4]), cfg.ema_len);
+    let rem = qty, curStop = stop, be = false, exitNext = false; const done = new Set(), events = [];
+    const sell = (date, q, px, reason) => { q = Math.min(q, rem); if (q > 1e-9) { events.push({ reason, date, qty: r4(q), price: r4(px) }); rem -= q; } };
+    for (let i = 0; i < bars.length; i++) {
+      const [d, o, h, l, c] = bars[i];
+      if (d <= entryDate) continue;
+      if (rem <= 1e-9) break;
+      if (exitNext) { sell(d, rem, o, "ema"); break; }
+      const hitStop = () => { const px = o <= curStop ? o : (l <= curStop ? curStop : null); if (px !== null) { sell(d, rem, px, "stop"); return true; } return false; };
+      const hitTargets = () => { for (const [name, lvl, pct] of targets) if (!done.has(name) && h >= lvl && rem > 1e-9) { done.add(name); sell(d, shareAmount(qty * pct / 100, india), Math.max(o, lvl), name); } };
+      if (stopFirst) { if (hitStop()) break; hitTargets(); } else { hitTargets(); if (rem > 1e-9 && hitStop()) break; }
+      if (rem <= 1e-9) break;
+      if (!be && h >= beLevel) { be = true; curStop = Math.max(curStop, costPx); }
+      if (be && ema[i] !== null && c < ema[i]) exitNext = true;
+    }
+    let lastEma = null; for (let i = ema.length - 1; i >= 0; i--) if (ema[i] !== null) { lastEma = ema[i]; break; }
+    return { events, state: { R: r4(R), stop: r4(curStop), remaining: r4(rem), be, exit_next: exitNext, ema: lastEma === null ? null : r4(lastEma),
+      finished: rem <= 1e-9, targets: targets.filter(t => !done.has(t[0])).map(t => ({ reason: t[0], price: r4(t[1]) })) } };
+  }
+
+
+  /* Per-lot outcomes (FIFO): what each BUY fill actually returned once it was fully sold. */
+  function lotOutcomes(fills) {
+    const ff = fills.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.side === b.side ? 0 : a.side === "BUY" ? -1 : 1) || (a.created_at || "").localeCompare(b.created_at || ""));
+    const book = {}, all = [];
+    for (const f of ff) {
+      const q = +f.qty, p = +f.price, fee = +f.fees_total || 0, key = f.portfolio + ":" + f.symbol;
+      if (f.side === "BUY") { const lot = { fill: f, qty: q, unit: p + fee / q, left: q, proceeds: 0 }; (book[key] = book[key] || []).push(lot); all.push(lot); }
+      else {
+        let left = q; const L = book[key] || [], net = (q * p - fee) / q;
+        while (left > 1e-9 && L.length) { const lot = L[0], m = Math.min(left, lot.left); lot.proceeds += m * net; lot.left -= m; left -= m; if (lot.left <= 1e-9) L.shift(); }
+      }
+    }
+    return all.map(l => ({ id: l.fill.id, portfolio: l.fill.portfolio, symbol: l.fill.symbol, yf: l.fill.yf, date: l.fill.date, price: +l.fill.price, qty: l.qty, unit: l.unit,
+      stop: l.fill.stop_ref != null ? +l.fill.stop_ref : null, closed: l.left <= 1e-9, actual: l.proceeds - (l.qty - l.left) * l.unit }));
+  }
+  /* What the playbook would have made on the same entries, replayed on the stored daily candles. */
+  function playbookBacktest(fills, candles, settings, variants) {
+    const stopFirst = (settings.engine || {}).same_bar_priority !== "target";
+    const rows = []; let skipped = 0;
+    for (const lot of lotOutcomes(fills)) {
+      if (!lot.closed) continue;
+      const c = candles[lot.yf];
+      if (!(lot.stop > 0 && lot.price > lot.stop) || !c || !c.d || c.d.length < 2 || c.d[0] > lot.date) { skipped++; continue; }
+      const bars = c.d.map((d, i) => [d, c.o[i], c.h[i], c.l[i], c.c[i]]), last = c.c[c.c.length - 1], india = lot.portfolio === "IN";
+      const vals = variants.map(v => {
+        const r = playbookRun(bars, lot.date, lot.price, lot.qty, lot.unit, lot.stop, v.cfg, india, stopFirst);
+        if (!r) return null;
+        let pnl = -lot.qty * lot.unit;
+        for (const e of r.events) pnl += e.qty * e.price - tradeFees(lot.portfolio, "SELL", e.qty, e.price, settings, true, e.date).total;
+        return pnl + r.state.remaining * last;
+      });
+      if (vals.some(v => v === null)) { skipped++; continue; }
+      rows.push({ symbol: lot.symbol, date: lot.date, actual: lot.actual, vals });
+    }
+    const sum = f => rows.reduce((t, r) => t + f(r), 0);
+    return { rows, skipped, actual: sum(r => r.actual), totals: variants.map((v, i) => sum(r => r.vals[i])) };
+  }
+
+  return { DEFAULT_SETTINGS, mergeSettings, playbookRun, lotOutcomes, playbookBacktest, emaSeries, r2, tradeFees, fyOf, defaultRate, fundCalc, buildAccount, tradeStats, byTag, insights };
 });
