@@ -302,6 +302,7 @@ function render() {
     ["Account value", money(a.equity), ""], ["Cash", money(a.cash), a.cash < -0.005 ? "dn" : ""],
     ["Blocked on orders", money(BLK.total), ""], ["Available", money(avail()), avail() < -0.005 ? "dn" : ""], ["Invested", money(a.invested), ""],
     ["Net deposits", money(a.netDeposits), ""],
+    ...(dayTotal() ? [["Day P&L", money(dayTotal().abs) + ` (${pct(dayTotal().pct)})`, sgn(dayTotal().abs)]] : []),
     ["Total P&L", money(a.pnl) + (a.netDeposits > 0 ? ` (${pct(a.pnl / a.netDeposits * 100)})` : ""), sgn(a.pnl)],
     ["Realized", money(a.realized), sgn(a.realized)], ["Charges paid", money(a.fees), ""],
   ].map(s => `<div class="stat"><b class="${s[2]}">${s[1]}</b><span>${s[0]}</span></div>`).join("") : "";
@@ -433,7 +434,7 @@ function viewDash() {
     ${k("Expectancy / trade", money(s.expectancy), sgn(s.expectancy))}${k("Average R", s.avgR == null ? "–" : s.avgR.toFixed(2) + "R")}
     ${k("Avg days: winners", s.holdWin == null ? "–" : s.holdWin.toFixed(1))}${k("Avg days: losers", s.holdLoss == null ? "–" : s.holdLoss.toFixed(1))}
     ${k("Best trade", s.best == null ? "–" : money(s.best), sgn(s.best))}${k("Worst trade", s.worst == null ? "–" : money(s.worst), sgn(s.worst))}
-    ${k("Deposit-adjusted return", pct(a.twrPct), sgn(a.twrPct))}${k("Max drawdown", a.maxDrawdownPct == null ? "–" : "-" + a.maxDrawdownPct.toFixed(1) + "%")}
+    ${(() => { const d = dayTotal(); return d ? k("Day P&L", money(d.abs) + " (" + pct(d.pct) + ")", sgn(d.abs)) : ""; })()}${k("Deposit-adjusted return", pct(a.twrPct), sgn(a.twrPct))}${k("Max drawdown", a.maxDrawdownPct == null ? "–" : "-" + a.maxDrawdownPct.toFixed(1) + "%")}
     ${k(MKT[M].benchName + " (same period)", pct(a.benchPct), sgn(a.benchPct))}${k("Unrealized P&L", money(a.unrealized), sgn(a.unrealized))}
   </div></div>
   <h2>Observations</h2><div class="card">${ins.length ? `<ul class="ins">${ins.map(i => `<li class="${i.level}">${esc(i.text)}</li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Nothing to report yet.</p>'}
@@ -462,6 +463,24 @@ function viewBacktest() {
 
 /* --------------------------------------------------------------- positions -- */
 const OPENPOS = new Set();
+let DAYMODE = ls.get("paper-daymode") === "1";
+/* Day change for an open position: last close against the session before it. Shares bought on the last session count from their buy price. */
+function dayChange(p) {
+  const ser = (PM[p.yf] || []).slice().sort((x, y) => (x.date < y.date ? -1 : 1)), last = p.priceDate;
+  const prev = ser.filter(x => x.date < last).pop();
+  const bought = S.fills.filter(f => f.portfolio === M && f.symbol === p.symbol && f.side === "BUY" && f.date === last);
+  const nq = Math.min(p.qty, bought.reduce((t, f) => t + +f.qty, 0)), nv = bought.reduce((t, f) => t + +f.qty * +f.price, 0) * (nq && bought.length ? nq / bought.reduce((t, f) => t + +f.qty, 0) : 0);
+  if (!prev && !nq) return null;
+  const oldQ = p.qty - nq, base = (prev ? oldQ * prev.close : 0) + nv;
+  if (!(base > 0)) return null;
+  const abs = p.qty * p.price - base;
+  return { abs, pct: abs / base * 100, base };
+}
+function dayTotal() {
+  let abs = 0, base = 0;
+  for (const p of ACC.positions) { const d = dayChange(p); if (d) { abs += d.abs; base += d.base; } }
+  return base > 0 ? { abs, pct: abs / base * 100 } : null;
+}
 const tvUrl = sym => "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent((M === "IN" ? "NSE:" + sym.replace(/[&-]/g, "_") : sym.replace(/-/g, ".")));
 const targetOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "LIMIT" && (o.status === "pending" || o.status === "waiting"));
 const pbFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.pb && o.pb_state && !o.pb_state.finished);
@@ -505,19 +524,21 @@ function posChart(p, stop, so) {
 }
 const addDays = (d, n) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10);
 function viewPos() {
-  const a = ACC, P = [...a.positions].sort((x, y) => y.pnl - x.pnl);      // biggest absolute profit first; header clicks re-sort
+  const a = ACC, DC = Object.fromEntries(a.positions.map(p => [p.symbol, dayChange(p)])), shown = p => DAYMODE ? (DC[p.symbol] ? DC[p.symbol].abs : -Infinity) : p.pnl;
+  const P = [...a.positions].sort((x, y) => shown(y) - shown(x));      // biggest absolute profit first; header clicks re-sort
   if (!P.length) return empty("No open positions.<br><br>" + `<button class="primary" data-act="neworder">New order</button>`);
   const rows = P.map(p => {
     const so = stopOrderFor(p.symbol), pbo = pbFor(p.symbol), pbs = pbo && pbo.pb_state, stop = pbs ? pbs.stop : so ? +so.price : p.stop, dist = stop != null && p.price ? (p.price - stop) / p.price * 100 : null;
     const open = OPENPOS.has(p.symbol);
     return `<tr class="prow" data-act="togglepos" data-sym="${esc(p.symbol)}"><td>${esc(p.symbol)} <a href="${tvUrl(p.symbol)}" target="_blank" rel="noopener" data-act="none" title="Open in TradingView">&#8599;</a>${p.tag ? `<span class="nm">${esc(p.tag)}</span>` : ""}</td><td>${num(p.qty)}</td><td>${money(p.avg)}</td><td>${money(p.price)}<span class="nm">${p.priceDate || "no price yet"}</span></td>
-      <td>${money(p.value)}</td><td class="${sgn(p.pnl)}">${money(p.pnl)}</td><td class="${sgn(p.pct)}">${pct(p.pct)}</td>
+      <td>${money(p.value)}</td>${DAYMODE ? (DC[p.symbol] ? `<td class="${sgn(DC[p.symbol].abs)}">${money(DC[p.symbol].abs)}</td><td class="${sgn(DC[p.symbol].pct)}">${pct(DC[p.symbol].pct)}</td>` : "<td>\u2013</td><td>\u2013</td>") : `<td class="${sgn(p.pnl)}">${money(p.pnl)}</td><td class="${sgn(p.pct)}">${pct(p.pct)}</td>`}
       <td>${stop != null ? money(stop) + `<span class="nm">${pbs ? "playbook" + (pbs.be ? " \u00b7 at cost" : "") : so ? "stop order" : "planned"}${dist != null ? ` · ${dist.toFixed(1)}% below` : ""}</span>` : '<span class="mut">none</span>'}${pbs && pbs.ema != null ? `<span class="nm">${pbs.exit_next ? "sells at the next open" : "exit on a close below " + money(pbs.ema)}</span>` : ""}</td><td>${p.days}</td>
       <td><button class="sm" data-act="sell" data-sym="${esc(p.symbol)}">Sell</button><button class="sm" data-act="setstop" data-sym="${esc(p.symbol)}">${so ? "Move stop" : "Set stop"}</button></td></tr>${open ? `<tr class="chrow"><td colspan="10">${posChart(p, stop, so || pbs)}</td></tr>` : ""}`;
   }).join("");
-  return `<div class="bar"><button class="primary" data-act="neworder">New order</button></div>
-  <div class="tw"><table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last close</th><th>Value</th><th>P&amp;L</th><th>%</th><th>Stop</th><th>Days</th><th></th></tr></thead><tbody>${rows}</tbody>
-  <tfoot><tr><td>Total</td><td></td><td></td><td></td><td>${money(a.invested)}</td><td class="${sgn(a.unrealized)}">${money(a.unrealized)}</td><td></td><td></td><td></td><td></td></tr></tfoot></table></div>
+  const dt = dayTotal();
+  return `<div class="bar"><button class="primary" data-act="neworder">New order</button><span class="chips"><button class="chip${DAYMODE ? "" : " on"}" data-act="posmode" data-v="0">Overall</button><button class="chip${DAYMODE ? " on" : ""}" data-act="posmode" data-v="1">Day change</button></span></div>
+  <div class="tw"><table><thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last close</th><th>Value</th><th>${DAYMODE ? "Day P&amp;L" : "P&amp;L"}</th><th>${DAYMODE ? "Day %" : "%"}</th><th>Stop</th><th>Days</th><th></th></tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr><td>Total</td><td></td><td></td><td></td><td>${money(a.invested)}</td>${DAYMODE ? (dt ? `<td class="${sgn(dt.abs)}">${money(dt.abs)}</td><td class="${sgn(dt.pct)}">${pct(dt.pct)}</td>` : "<td></td><td></td>") : `<td class="${sgn(a.unrealized)}">${money(a.unrealized)}</td><td></td>`}<td></td><td></td><td></td></tr></tfoot></table></div>
   <p class="hint">Average cost includes buying charges. Last close comes from the daily job; it updates after each market closes. Tap a row for its chart (entry, stop-loss and target lines), or &#8599; for TradingView.</p>`;
 }
 
@@ -843,6 +864,7 @@ document.addEventListener("click", async e => {
   switch (act) {
     case "mkt": M = b.dataset.v; ls.set("paper-m", M); return render();
     case "view": VIEW = b.dataset.v; ls.set("paper-v", VIEW); return render();
+    case "posmode": DAYMODE = b.dataset.v === "1"; ls.set("paper-daymode", DAYMODE ? "1" : "0"); return render();
     case "ofilter": OFILTER = b.dataset.v; return render();
     case "closedlg": return closeDlg();
     case "quick": { const i = $("dform").elements[M === "IN" ? "amt" : "inr"]; i.value = (+i.value || 0) + +b.dataset.v; i.dispatchEvent(new Event("input", { bubbles: true })); return; }
