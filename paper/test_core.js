@@ -124,3 +124,16 @@ test("backtest replays the playbook on a closed buy and compares it with what wa
   assert.strictEqual(r2(bt.actual), 40); assert.strictEqual(r2(bt.totals[0]), 90); assert.strictEqual(r2(bt.totals[1]), 0);
   assert.strictEqual(C.playbookBacktest(fills.slice(0, 1), { ABC: { d, o, h, l, c } }, S0, [{ cfg }]).rows.length, 0);     // still open: not compared
 });
+
+test("a partial sell is not a finished trade until the whole entry is sold", () => {
+  const led = [{ kind: "deposit", date: "2026-10-01", amount: 10000 }];
+  const buy = { ...fill("b", "BUY", 10, 100, "2026-10-02"), stop_ref: 90 };
+  const part = fill("s1", "SELL", 3, 130, "2026-10-05");
+  let a = C.buildAccount(led, [buy, part], {}, "^NSEI");
+  assert.strictEqual(a.stats.n, 0); assert.strictEqual(a.rounds.length, 0); assert.strictEqual(a.trades.length, 1); assert.strictEqual(a.trades[0].partial, true);
+  assert.strictEqual(a.stats.best, null); assert.strictEqual(a.partialN, 1); assert.ok(a.partialPnl > 60 && a.partialPnl < 91);
+  a = C.buildAccount(led, [buy, part, fill("s2", "SELL", 7, 100, "2026-10-09")], {}, "^NSEI");
+  assert.strictEqual(a.stats.n, 1); assert.strictEqual(a.rounds[0].qty, 10); assert.ok(Math.abs(a.rounds[0].pnl - a.realized) < 1e-6);
+  assert.ok(Math.abs(a.rounds[0].r - a.rounds[0].pnl / 100) < 1e-6);                  // 1R = 10 shares x $10
+  assert.strictEqual(a.partialN, 0);
+});

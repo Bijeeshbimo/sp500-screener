@@ -93,31 +93,38 @@
     const issues = [];
     const ff = fills.slice().sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : (a.side === b.side ? 0 : a.side === "BUY" ? -1 : 1) || (a.created_at || "") .localeCompare(b.created_at || ""));
-    const lots = {}, trades = [], meta = {};
+    const lots = {}, trades = [], rounds = [], meta = {};
     let fees = 0;
     for (const f of ff) {
       const q = +f.qty, p = +f.price, fee = +f.fees_total || 0;
       fees += fee;
       meta[f.symbol] = { yf: f.yf, tag: f.tag };
       if (f.side === "BUY") {
-        (lots[f.symbol] = lots[f.symbol] || []).push({ qty: q, price: p, unit: p + fee / q, date: f.date, stop: f.stop_ref != null ? +f.stop_ref : null, tag: f.tag || "", id: f.id });
+        (lots[f.symbol] = lots[f.symbol] || []).push({ q0: q, cost: 0, got: 0, dsum: 0, qty: q, price: p, unit: p + fee / q, date: f.date, stop: f.stop_ref != null ? +f.stop_ref : null, tag: f.tag || "", id: f.id });
       } else {
         const net = (q * p - fee) / q;
-        let left = q, cost = 0, proceeds = 0, risk = 0, riskOk = true, dsum = 0, tag = "", first = null;
+        let left = q, cost = 0, proceeds = 0, risk = 0, riskOk = true, dsum = 0, tag = "", first = null, stillOpen = false;
         const L = lots[f.symbol] || [];
         while (left > 1e-9 && L.length) {
           const lot = L[0], m = Math.min(left, lot.qty);
           cost += m * lot.unit; proceeds += m * net; dsum += m * dayDiff(f.date, lot.date);
           if (lot.stop != null && lot.price > lot.stop) risk += m * (lot.price - lot.stop); else riskOk = false;
           if (!first) { first = lot.date; tag = lot.tag; }
-          lot.qty -= m; left -= m; if (lot.qty <= 1e-9) L.shift();
+          lot.cost += m * lot.unit; lot.got += m * net; lot.dsum += m * dayDiff(f.date, lot.date);
+          lot.qty -= m; left -= m;
+          if (lot.qty <= 1e-9) {          // the whole entry is now sold: that is one finished trade, however many sells it took
+            const rp = lot.got - lot.cost, rk = lot.stop != null && lot.price > lot.stop ? lot.q0 * (lot.price - lot.stop) : 0;
+            rounds.push({ symbol: f.symbol, qty: lot.q0, entry: lot.unit, entryDate: lot.date, exitDate: f.date, pnl: rp, pct: rp / lot.cost * 100,
+                          days: lot.dsum / lot.q0, r: rk > 0 ? rp / rk : null, tag: lot.tag || "" });
+            L.shift();
+          } else stillOpen = true;
         }
         if (left > 1e-9) issues.push(`Sold ${left} more ${f.symbol} than held on ${f.date}; check your fills.`);
         const mq = q - Math.max(left, 0);
         if (mq > 0) {
           const pnl = proceeds - cost;
           trades.push({ symbol: f.symbol, qty: mq, entry: cost / mq, exit: net, entryDate: first, exitDate: f.date, pnl,
-                        pct: pnl / cost * 100, days: dsum / mq, r: riskOk && risk > 0 ? pnl / risk : null, tag: tag || "", fillId: f.id });
+                        pct: pnl / cost * 100, days: dsum / mq, r: riskOk && risk > 0 ? pnl / risk : null, tag: tag || "", fillId: f.id, partial: stillOpen });
         }
       }
     }
@@ -186,6 +193,7 @@
     const invested = sum(positions.map(p => p.value));
     const equity = cash + invested;
     const realized = sum(trades.map(t => t.pnl));
+    const partialLots = Object.values(lots).reduce((x, y) => x.concat(y), []).filter(l => l.cost > 0);      // entries partly sold and still open
     let benchPct = null;
     const barr = prices[bench] || [];
     if (events.length && barr.length) {
@@ -193,8 +201,8 @@
       benchPct = (barr[barr.length - 1].close / startBar.close - 1) * 100;
     }
     return { cash, invested, equity, netDeposits: netDep, pnl: equity - netDep, realized, unrealized: sum(positions.map(p => p.pnl)),
-             fees, positions, trades, curve, issues, twrPct: curve.length ? curve[curve.length - 1].twr : null,
-             maxDrawdownPct: maxDrawdownPct == null ? null : maxDrawdownPct, benchPct, stats: tradeStats(trades) };
+             fees, positions, trades, rounds, curve, issues, twrPct: curve.length ? curve[curve.length - 1].twr : null,
+             maxDrawdownPct: maxDrawdownPct == null ? null : maxDrawdownPct, benchPct, stats: tradeStats(rounds), partialPnl: sum(partialLots.map(l => l.got - l.cost)), partialN: partialLots.length };
   }
 
   function tradeStats(trades) {
@@ -245,11 +253,12 @@
       const cashPct = acc.cash / acc.equity * 100;
       if (acc.positions.length && cashPct > 60) add("info", `${cashPct.toFixed(0)}% of the account is idle cash.`);
     }
+    if (acc.partialN > 0) add("info", `Partial sells on ${acc.partialN} position(s) you still hold have booked ${f0(acc.partialPnl)}. That is in Realized P&L, but a trade is only counted in the statistics once its whole position is sold.`);
     const nostop = acc.positions.filter(p => !(ctx.stopSymbols || new Set()).has(p.symbol));
     if (nostop.length) add("warn", `No pending stop order for: ${nostop.map(p => p.symbol).join(", ")}.`);
     const near = acc.positions.filter(p => p.stop != null && p.price > 0 && (p.price - p.stop) / p.price * 100 < 2 && p.price >= p.stop);
     if (near.length) add("info", `Within 2% of the planned stop: ${near.map(p => p.symbol).join(", ")}.`);
-    const tags = byTag(acc.trades).filter(t => t.n >= 3);
+    const tags = byTag(acc.rounds).filter(t => t.n >= 3);
     if (tags.length >= 2) {
       const best = tags.slice().sort((a, b) => b.expectancy - a.expectancy)[0], worst = tags.slice().sort((a, b) => a.expectancy - b.expectancy)[0];
       if (best.tag !== worst.tag) add("info", `By tag, "${best.tag}" averages ${f0(best.expectancy)} per trade and "${worst.tag}" ${worst.expectancy < 0 ? "loses " : "makes "}${f0(worst.expectancy)}.`);
