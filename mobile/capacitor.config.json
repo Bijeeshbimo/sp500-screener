@@ -1,0 +1,10 @@
+{
+  "appId": "in.breakoutdesk.app",
+  "appName": "Breakout Desk",
+  "webDir": "www",
+  "backgroundColor": "#f3f5fa",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "StatusBar": { "overlaysWebView": false, "style": "LIGHT", "backgroundColor": "#f3f5fa" }
+  }
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3f5fa">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Breakout Desk">
+<title>Breakout Desk</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+<script>
+  // Set the theme before first paint so there is no flash.
+  (function () {
+    try {
+      var p = localStorage.getItem("bd-theme") || "auto";
+      var dark = p === "dark" || (p === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="ttl" id="ttl"></div>
+    <div class="seg" id="mseg" role="tablist" aria-label="Market">
+      <button data-act="mkt" data-v="IN" aria-pressed="true">India</button><button data-act="mkt" data-v="US" aria-pressed="false">US</button>
+    </div>
+    <button class="ibtn" id="refresh-btn" data-act="refresh" aria-label="Refresh data"></button>
+  </header>
+  <main id="view" aria-live="polite"></main>
+  <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+  <div id="layers"></div>
+  <div id="toast" role="status"></div>
+
+  <section id="auth" hidden>
+    <div class="logo" style="width:64px;height:64px"></div>
+    <h1>Welcome back</h1><p>Sign in to your practice account. It is the same login as the paper-trading web page.</p>
+    <form id="auth-form" class="g1" novalidate>
+      <label class="fld"><span>Email</span><input id="a-email" type="email" autocomplete="username" inputmode="email" autocapitalize="off"></label>
+      <label class="fld"><span>Password</span><input id="a-pass" type="password" autocomplete="current-password"></label>
+      <div class="err" id="a-msg" role="alert"></div>
+      <button class="btn brand block" id="a-in" type="submit">Sign in</button>
+      <button class="btn ghost block" id="a-up" type="button">Create account</button>
+      <button class="btn block" id="a-reset" type="button" style="background:none;color:var(--brand);height:40px">Forgot password?</button>
+    </form>
+  </section>
+
+  <section id="boot"><div class="logo"></div><b style="font-size:20px">Breakout Desk</b><p id="boot-msg">Loading…</p><button class="btn brand" id="boot-retry" hidden>Try again</button></section>
+</div>
+
+<script src="config.js"></script>
+<script src="paper-core.js"></script>
+<script src="screener-core.js"></script>
+<script src="charts.js"></script>
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script src="v-home.js"></script>
+<script src="v-scan.js"></script>
+<script src="v-trade.js"></script>
+<script src="v-port.js"></script>
+<script src="v-more.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

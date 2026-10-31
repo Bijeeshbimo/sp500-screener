@@ -178,3 +178,18 @@ paper/requirements.txt       the engine's one extra package (firebase-admin)
 paper/engine.py, fees.py     the daily order engine and the Dhan charges
 paper/test_*.py, test_core.js  tests
 ```
+
+---
+
+## 📱 Android app (Breakout Desk)
+
+The same screener and paper-trading account as a phone app: Home, Screener, Orders, Portfolio and More tabs, light and dark themes, chart and checklist for every stock, and the same Firebase login as the paper-trading page. It reads the daily results from your GitHub Pages site and keeps the last copy for offline use.
+
+**Get the APK**
+1. Repo → **Actions → Build Android app → Run workflow** (it also runs by itself whenever `docs/app` or `mobile` changes). Takes about 5 minutes.
+2. Open **Releases** on the repo's front page and download `BreakoutDesk.apk` on your phone.
+3. Tap it to install. Android will ask once to allow installs from your browser (Settings → Install unknown apps).
+
+New builds install **over** the old one and keep your login. The app can also run in any phone browser at `https://<you>.github.io/<repo>/app/` and be added to the home screen.
+
+The app's data address is in `docs/app/config.js` (`pagesUrl`) and can be changed in the app under More → Settings. The signing key in `mobile/keystore` is for personal sideloading only, not for the Play Store.
