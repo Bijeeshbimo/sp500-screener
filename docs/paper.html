@@ -98,11 +98,15 @@
   .auth { max-width:380px; margin:30px auto; }
   .auth .card > * + * { margin-top:10px; }
 </style>
+<script>
+  // Classic / Modern interface choice (shared with the Modern app in app/). Modern sends you to app/.
+  try { if (localStorage.getItem("bd-ui") === "modern" && !location.search) location.replace("app/"); } catch (e) {}
+</script>
 </head>
 <body>
 <div class="wrap">
   <div class="head">
-    <div><h1>Paper Trading</h1><div class="sub"><a href="./">&larr; Screener</a> &middot; <span id="sub"></span></div></div>
+    <div><h1>Paper Trading</h1><div class="sub"><a href="./">&larr; Screener</a> &middot; <a href="app/" id="ui-modern" title="Switch to the phone-style interface">Modern view</a> &middot; <span id="sub"></span></div></div>
     <div class="who" id="who"></div>
   </div>
   <div id="banner"></div>
@@ -921,6 +925,7 @@ function handleParams() {
 }
 buildTabs();
 boot();
+  document.getElementById("ui-modern").addEventListener("click", () => { try { localStorage.setItem("bd-ui", "modern"); } catch (e) {} });
 </script>
 </body>
 </html>

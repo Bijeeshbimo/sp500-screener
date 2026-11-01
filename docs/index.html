@@ -115,10 +115,14 @@
   .pvs text { font:10px system-ui,sans-serif; fill:var(--muted); }
   .pvs .lvt { fill:var(--fg); }
 </style>
+<script>
+  // Classic / Modern interface choice (shared with the Modern app in app/). Modern sends you to app/.
+  try { if (localStorage.getItem("bd-ui") === "modern" && !location.search) location.replace("app/"); } catch (e) {}
+</script>
 </head>
 <body>
 <div class="wrap">
-  <h1>Breakout Screener <a href="paper.html" class="upd" style="text-decoration:none">Paper trading &rarr;</a></h1>
+  <h1>Breakout Screener <a href="paper.html" class="upd" style="text-decoration:none">Paper trading &rarr;</a> <a href="app/" class="upd" style="text-decoration:none" id="ui-modern" title="Switch to the phone-style interface">Modern view</a></h1>
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="sub"><span id="sub"></span> <button type="button" class="upd" id="chk">Check for new data</button> <span id="chk-msg" aria-live="polite"></span></div>
   <div class="newdata" id="newdata" hidden>New data is available. <button type="button" id="loadnew">Load it</button></div>
@@ -702,6 +706,7 @@ $("loadnew").addEventListener("click", loadNew);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) checkNew(false); });
 setInterval(() => { if (!document.hidden) checkNew(false); }, 15 * 60 * 1000);
 checkNew(false);
+  document.getElementById("ui-modern").addEventListener("click", () => { try { localStorage.setItem("bd-ui", "modern"); } catch (e) {} });
 </script>
 </body>
 </html>
