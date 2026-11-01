@@ -37,7 +37,7 @@ function notices() {
 
 Views.home = function () {
   const a = ACC, d = MD[M], cur = MKT[M].name;
-  let h = notices();
+  let h = notices() + '<div class="dcols"><div class="dmain">';
   if (!hasMoney()) {
     h += `<div class="hero"><div class="lbl">${cur} practice account</div><div class="big">${money(0)}</div>
       <div class="chg">Add pretend funds to start paper trading.</div>
@@ -55,6 +55,7 @@ Views.home = function () {
   const pend = livePending().filter(o => !o.parent_id || o.status === "pending");
   if (pend.length) h += `<button class="card tile link" data-act="tab" data-v="orders" style="width:100%"><small>Pending orders</small><b>${pend.length} waiting for the next market close</b></button>`;
 
+  h += '</div><div class="dside">';
   if (!d) h += `<div class="sec"><h2>Breakouts today</h2></div>${skeletons(3)}`;
   else {
     const sc = screened(M), f = filters(M);
@@ -63,5 +64,5 @@ Views.home = function () {
     else h += emptyBox("🔍", "No matches", "Nothing passes the " + f.N + "-session breakout with your filters.", `<button class="btn sm brand" data-act="tab" data-v="scan">Adjust filters</button>`);
     h += `<div class="card note">${d.meta.scanned.toLocaleString()} stocks scanned for the ${esc(d.meta.date)} close · refreshed ${esc(d.meta.generated)}. These are chart observations, not advice.</div>`;
   }
-  return h;
+  return h + '</div></div>';
 };

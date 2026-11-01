@@ -25,6 +25,7 @@ function render() {
   const pend = livePending().filter(o => !o.parent_id || o.status === "pending").length;
   $("#tabbar").innerHTML = TABS.map(([k, label, ic]) => `<button data-act="tab" data-v="${k}" aria-selected="${TAB === k}">${icon(ic)}<span>${label}</span>${k === "orders" && pend ? `<span class="badge">${pend}</span>` : ""}</button>`).join("");
   const v = $("#view"), st = v.scrollTop;
+  v.dataset.tab = TAB;
   v.innerHTML = Views[TAB]();
   v.scrollTop = st;
   Charts.bind(v);
@@ -103,4 +104,12 @@ async function boot() {
   // Android: the back button closes the top screen first (handled through history), then leaves the app.
   try { const A = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App; if (A && A.addListener) A.addListener("appStateChange", s => { if (s.isActive && Date.now() - LASTCHK > 120000) checkNewData(true).then(() => render()); }); } catch (e) {}
 }
+ACT.themecycle = () => { const o = ["auto", "light", "dark"], c = ls.get("bd-theme") || "auto"; ls.set("bd-theme", o[(o.indexOf(c) + 1) % 3]); applyTheme(); render(); };
+(function sideBits() {
+  const native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  const c = $("#side-classic"); if (native) c.hidden = true;
+  else c.addEventListener("click", () => { try { localStorage.setItem("bd-ui", "classic"); } catch (e) {} });
+  const upd = () => { const l = $("#th-lbl"); if (l) l.textContent = ({ auto: "Auto", light: "Light", dark: "Dark" })[ls.get("bd-theme") || "auto"]; };
+  document.addEventListener("click", () => setTimeout(upd, 0)); upd();
+})();
 boot();
