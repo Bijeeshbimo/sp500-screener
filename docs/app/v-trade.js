@@ -242,7 +242,7 @@ ACT.setstop = el => {
   openSheet(`${sheetHead(so ? "Move stop" : "Set stop", esc(sym))}<form id="sf" class="sheet-in g1" novalidate>
     <p class="hint" style="margin:0">Sell all ${num(p.qty)} shares if the price falls to the stop. Last close ${money(p.price)}.</p>
     <div class="g2"><label class="fld"><span>Stop price (${MKT[M].cur})</span><input name="price" type="number" inputmode="decimal" step="any" value="${so ? so.price : ""}"></label>
-      <label class="fld"><span>Fills after</span><input name="after" type="date" value="${so ? esc(so.after_date) : esc(lastSession())}"></label></div><div class="err" role="alert"></div></form>
+      <label class="fld"><span>Fills after</span><input name="after" type="date" value="${esc(lastSession())}"></label></div><div class="err" role="alert"></div></form>
     <div class="sheet-ft btnrow"><button class="btn ghost" data-act="back">Cancel</button><button class="btn brand" type="submit" form="sf">Save stop</button></div>`);
   const f = $("#sf", topLayer().el);
   f.onsubmit = async e => {
