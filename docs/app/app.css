@@ -302,8 +302,6 @@ ul.ins li.good::before { background: var(--up); } ul.ins li.warn::before { backg
   #layers { z-index: 60; }
   .layer .scrim { z-index: 0; }
   .page-body { left: auto; width: min(780px, 100%); box-shadow: -24px 0 60px rgba(0, 0, 0, .28); border-left: 1px solid var(--line); z-index: 1; }
-  .layer:has(.page-body)::before { content: ""; position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity .2s; }
-  .layer.in:has(.page-body)::before { opacity: 1; }
   .page-in { padding: 4px 24px 28px; } .page-hd { padding: 18px 20px 10px; } .page-ft { padding: 14px 24px; }
   .sheet-body { left: 50%; right: auto; bottom: auto; top: 50%; width: min(560px, calc(100% - 48px)); max-height: 90dvh; border-radius: 22px; overflow: hidden; opacity: 0; transform: translate(-50%, -46%); transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .18s; box-shadow: 0 30px 80px rgba(0, 0, 0, .4); }
   .layer.in .sheet-body { transform: translate(-50%, -50%); opacity: 1; }
@@ -318,3 +316,10 @@ ul.ins li.good::before { background: var(--up); } ul.ins li.warn::before { backg
   #view > *:not(.dcols):not(.utabs), #view > .dcols, #view > .utabs { max-width: 1320px; }
   #scan-list .card.flush { grid-template-columns: repeat(3, minmax(0, 1fr)); } #scan-list .row:last-child:nth-child(odd) { grid-column: auto; }
 }
+
+/* external links (TradingView, Yahoo Finance) */
+.xlinks { display: flex; gap: 10px; flex-wrap: wrap; }
+.xl { display: inline-flex; align-items: center; gap: 9px; padding: 9px 14px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); color: var(--ink); font-weight: 700; font-size: 13.5px; }
+.xl img, .xl .fb { width: 20px; height: 20px; border-radius: 5px; flex: none; }
+.xl .fb { display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 800; }
+.xl svg { width: 14px; height: 14px; color: var(--mut); flex: none; }

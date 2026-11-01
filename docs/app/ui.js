@@ -76,7 +76,7 @@ function pushLayer(kind, html, opts) {
   el.className = "layer";
   el.innerHTML = kind === "sheet"
     ? `<div class="scrim"></div><div class="sheet-body ${opts.cls || ""}"><div class="grab"></div>${html}</div>`
-    : `<div class="page-body">${html}</div>`;
+    : `<div class="scrim"></div><div class="page-body">${html}</div>`;
   $("#layers").appendChild(el);
   const L = { el, kind, opts };
   LAYERS.push(L);
@@ -107,6 +107,7 @@ window.addEventListener("popstate", e => {
   if (!LAYERS.length && AFTER_POP.length) { const f = AFTER_POP; AFTER_POP = []; f.forEach(fn => fn()); }
 });
 try { history.replaceState({ d: 0 }, ""); } catch (e) {}
+document.addEventListener("keydown", e => { if (e.key === "Escape" && LAYERS.length) closeTop(); });
 const topLayer = () => LAYERS[LAYERS.length - 1];
 function sheetHead(title, sub) { return `<div class="sheet-hd"><div><h3>${esc(title)}</h3>${sub ? `<div class="mut" style="font-size:12.5px">${sub}</div>` : ""}</div><button class="ibtn" data-act="back" aria-label="Close">${icon("close")}</button></div>`; }
 function pageHead(title, sub, right) { return `<div class="page-hd"><button class="ibtn" data-act="back" aria-label="Back">${icon("back")}</button><div class="t"><b>${esc(title)}</b>${sub ? `<small>${sub}</small>` : ""}</div>${right || ""}</div>`; }
