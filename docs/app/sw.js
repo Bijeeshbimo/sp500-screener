@@ -1,7 +1,7 @@
 /* Breakout Desk service worker (browser/PWA only; the Android app bundles these files itself).
    App files: stale-while-revalidate, so the app opens instantly and quietly updates itself.
    Screener data is cached by the page itself (network first), so it is never touched here. */
-const CACHE = "bd-shell-v7";
+const CACHE = "bd-shell-v8";
 const SHELL = ["./", "index.html", "app.css", "config.js", "paper-core.js", "screener-core.js", "charts.js", "store.js", "ui.js",
   "v-home.js", "v-scan.js", "v-trade.js", "v-port.js", "v-more.js", "app.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 

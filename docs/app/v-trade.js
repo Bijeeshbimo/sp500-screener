@@ -2,6 +2,7 @@
    daily engine (paper/engine.py) fills them the same way. */
 "use strict";
 let OTAB = "open";
+const rnd = (x, d) => Math.round(x * 10 ** d) / 10 ** d;        // clears floating-point noise: 7.24 - 1 is 6.24, not 6.2399999999
 
 /* A confirm sheet. Resolves after the sheet has fully closed, so it is safe to open another screen right afterwards. */
 function ask(title, msg, ok, danger) {
@@ -123,11 +124,11 @@ function openTicket(pref) {
   L.setPct = v => {
     const pos = ACC && ACC.positions.find(x => x.symbol === symOf()); if (!pos) return;
     let q = v === "all" ? pos.qty : pos.initQty * (+v) / 100;
-    q = india ? Math.max(1, Math.round(q)) : Math.round(q * 1e4) / 1e4;       // whole shares for India, fractions for US
-    q = Math.min(q, pos.qty);                                                // never more than is held
+    q = v === "all" ? (india ? Math.round(q) : rnd(q, 6)) : india ? Math.max(1, Math.round(q)) : rnd(q, 4);   // whole shares for India, decimals for US
+    q = Math.min(q, rnd(pos.qty, 6));                                                // never more than is held
     f.elements.qty.value = q; driver = "qty"; calc(); sync();
   };
-  L.setQty = d => { const q = Math.max(0, (+val(f, "qty") || 0) + d); f.elements.qty.value = india ? Math.round(q) : q; driver = "qty"; calc(); sync(); };
+  L.setQty = d => { const q = Math.max(0, (+val(f, "qty") || 0) + d); f.elements.qty.value = india ? Math.round(q) : rnd(q, 4); driver = "qty"; calc(); sync(); };
   if (pref.stop) f.elements.stopref.value = pref.stop;
   calc(); sync();
   f.onsubmit = async e => {

@@ -177,4 +177,4 @@ ACT.buystock = el => {
   const sym = el.dataset.sym, r = rowsOf(M).find(x => x.sym === sym), N = filters(M).N, ins = r ? SC.insights(r, N, MD[M].meta.cfg) : null;
   openTicket({ sym, side: "BUY", type: "STOP", px: r ? r.close : refPrice(sym), stop: ins && ins.stop ? ins.stop.px : "", tag: r ? "screener" : "", note: r ? `From the screener (close ${r.close})` : "" });
 };
-ACT.sellpos = el => { const p = ACC.positions.find(x => x.symbol === el.dataset.sym); if (p) openTicket({ sym: p.symbol, side: "SELL", qty: p.qty, type: "MARKET" }); };
+ACT.sellpos = el => { const p = ACC.positions.find(x => x.symbol === el.dataset.sym); if (p) openTicket({ sym: p.symbol, side: "SELL", qty: Math.round(p.qty * 1e6) / 1e6, type: "MARKET" }); };
