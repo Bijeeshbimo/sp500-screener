@@ -322,4 +322,12 @@ ul.ins li.good::before { background: var(--up); } ul.ins li.warn::before { backg
 .xl { display: inline-flex; align-items: center; gap: 9px; padding: 9px 14px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); color: var(--ink); font-weight: 700; font-size: 13.5px; }
 .xl img, .xl .fb { width: 20px; height: 20px; border-radius: 5px; flex: none; }
 .xl .fb { display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 800; }
-.xl svg { width: 14px; height: 14px; color: var(--mut); flex: none; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.page-hd .t { flex: 0 1 auto; }
+.xlinks.hd { flex-wrap: nowrap; gap: 8px; margin-left: 6px; }
+.xlinks.hd .xl { padding: 6px 10px; border-radius: 10px; font-size: 12.5px; gap: 7px; box-shadow: none; border: 1px solid var(--line); }
+@media (max-width: 520px) { .xlinks.hd .xl .lb { display: none; } .xlinks.hd .xl { padding: 7px; } }
+@media (min-width: 900px) {
+  #view#view[data-tab="orders"] > *, #view#view[data-tab="port"] > * { max-width: 860px; width: 100%; margin-left: auto; margin-right: auto; }
+}
+.btn.block { display: flex; }

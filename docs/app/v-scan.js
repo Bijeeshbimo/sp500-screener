@@ -22,7 +22,7 @@ function scanList() {
 /* Small "open in a new tab" chip with the site's own icon (loaded from its favicon; a coloured badge shows if offline). */
 function extLink(url, name, domain, letters, color) {
   const fb = `<span class="fb" style="background:${color}">${letters}</span>`;
-  return `<a class="xl" href="${url}" target="_blank" rel="noopener"><img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" alt="" width="20" height="20" loading="lazy" onerror="this.outerHTML=this.dataset.fb" data-fb="${esc(fb)}">${name}${icon("ext")}</a>`;
+  return `<a class="xl" href="${url}" target="_blank" rel="noopener"><img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" alt="" width="20" height="20" loading="lazy" onerror="this.outerHTML=this.dataset.fb" data-fb="${esc(fb)}"><span class="lb">${name}</span></a>`;
 }
 Views.scan = function () {
   const d = MD[M];
@@ -153,12 +153,10 @@ function stockHtml(sym, m) {
       <p class="hint">Observations that summarise a chart, not signals to buy or sell.</p></div>`;
   } else if (!p) body += `<div class="card note">This stock is not in the latest screener results, so there is no checklist or chart. You can still place an order.</div>`;
 
-  body += `<div class="xlinks">${extLink(tvUrl(sym, m), "TradingView", "tradingview.com", "TV", "#2962ff")}${extLink(yahooUrl(sym, m), "Yahoo Finance", "finance.yahoo.com", "Y!", "#6001d2")}</div>`;
-
   const foot = p
     ? `<div class="page-ft"><button class="btn sell" data-act="sellpos" data-sym="${esc(sym)}">Sell</button><button class="btn ghost" data-act="setstop" data-sym="${esc(sym)}">${si.so ? "Move stop" : "Set stop"}</button><button class="btn buy" data-act="buystock" data-sym="${esc(sym)}">Buy</button></div>`
     : `<div class="page-ft"><button class="btn buy" data-act="buystock" data-sym="${esc(sym)}">Paper trade this · Buy</button></div>`;
-  return pageHead(sym, esc(name), `<span class="pill brand">${esc(MKT[m].name)}</span>`) + `<div class="page-in">${body}</div>` + foot;
+  return pageHead(sym, esc(name), `<div class="xlinks hd">${extLink(tvUrl(sym, m), "TradingView", "tradingview.com", "TV", "#2962ff")}${extLink(yahooUrl(sym, m), "Yahoo Finance", "finance.yahoo.com", "Y!", "#6001d2")}</div><span class="pill brand" style="margin-left:auto">${esc(MKT[m].name)}</span>`) + `<div class="page-in">${body}</div>` + foot;
 }
 function posLineChart(p, si) {
   const px = (PM[p.yf] || []).filter(x => x.date >= addDays(p.since, -14));
