@@ -136,7 +136,7 @@ function stockHtml(sym, m) {
   if (p) {
     const dc = dayChange(p);
     body += `<div class="card"><div class="sec" style="padding:0 0 10px"><h2>Your position</h2><span class="pill ${p.pnl >= 0 ? "up" : "dn"}">${pct(p.pct)}</span></div><div class="kv">
-      <div><small>Quantity</small><b>${num(p.qty)}</b></div><div><small>Average cost</small><b>${money(p.avg, m)}</b></div>
+      <div><small>Quantity held</small><b>${num(p.qty)}</b></div><div><small>Initial quantity</small><b>${num(p.initQty)}</b>${p.initQty - p.qty > 1e-9 ? `<small>${num(p.initQty - p.qty)} sold so far</small>` : ""}</div><div><small>Average cost</small><b>${money(p.avg, m)}</b></div>
       <div><small>Value</small><b>${money(p.value, m)}</b></div><div><small>P&amp;L</small><b class="${sgn(p.pnl)}">${sgnm(p.pnl, m)}</b></div>
       ${dc ? `<div><small>Today</small><b class="${sgn(dc.abs)}">${sgnm(dc.abs, m)} (${pct(dc.pct)})</b></div>` : ""}<div><small>Held</small><b>${p.days} day${p.days === 1 ? "" : "s"}</b></div>
       <div><small>Stop</small><b>${si.stop != null ? money(si.stop, m) : "none"}</b><small>${si.pbs ? "playbook" + (si.pbs.be ? " · at cost" : "") : si.so ? "stop order" : si.stop != null ? "planned" : ""}${si.dist != null ? " · " + si.dist.toFixed(1) + "% below" : ""}</small></div>

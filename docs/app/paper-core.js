@@ -93,13 +93,15 @@
     const issues = [];
     const ff = fills.slice().sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : (a.side === b.side ? 0 : a.side === "BUY" ? -1 : 1) || (a.created_at || "") .localeCompare(b.created_at || ""));
-    const lots = {}, trades = [], rounds = [], meta = {};
+    const lots = {}, trades = [], rounds = [], meta = {}, cyc = {};      // cyc: shares bought since the position was last flat (its initial quantity)
+    const heldOf = sym => (lots[sym] || []).reduce((a, l) => a + l.qty, 0);
     let fees = 0;
     for (const f of ff) {
       const q = +f.qty, p = +f.price, fee = +f.fees_total || 0;
       fees += fee;
       meta[f.symbol] = { yf: f.yf, tag: f.tag };
       if (f.side === "BUY") {
+        cyc[f.symbol] = (heldOf(f.symbol) > 1e-9 ? cyc[f.symbol] || 0 : 0) + q;
         (lots[f.symbol] = lots[f.symbol] || []).push({ q0: q, cost: 0, got: 0, dsum: 0, qty: q, price: p, unit: p + fee / q, date: f.date, stop: f.stop_ref != null ? +f.stop_ref : null, tag: f.tag || "", id: f.id });
       } else {
         const net = (q * p - fee) / q;
@@ -120,6 +122,7 @@
           } else stillOpen = true;
         }
         if (left > 1e-9) issues.push(`Sold ${left} more ${f.symbol} than held on ${f.date}; check your fills.`);
+        if (heldOf(f.symbol) <= 1e-9) cyc[f.symbol] = 0;             // fully exited: the next buy starts a new position
         const mq = q - Math.max(left, 0);
         if (mq > 0) {
           const pnl = proceeds - cost;
@@ -141,7 +144,7 @@
       const qty = sum(L.map(l => l.qty)), cost = sum(L.map(l => l.qty * l.unit));
       const lp = lastPx(sym), px = lp ? lp.close : L[L.length - 1].price;
       const stops = L.filter(l => l.stop != null);
-      positions.push({ symbol: sym, yf: meta[sym].yf, qty, avg: cost / qty, cost, price: px, priceDate: lp ? lp.date : null,
+      positions.push({ symbol: sym, yf: meta[sym].yf, qty, initQty: Math.max(cyc[sym] || 0, qty), avg: cost / qty, cost, price: px, priceDate: lp ? lp.date : null,
         value: qty * px, pnl: qty * px - cost, pct: (qty * px / cost - 1) * 100, since: L[0].date, days: dayDiff(new Date().toISOString().slice(0, 10), L[0].date),
         stop: stops.length ? stops[stops.length - 1].stop : null, tag: L[0].tag || "" });
     }

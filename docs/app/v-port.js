@@ -7,7 +7,7 @@ function holdingRow(p) {
   const stopTxt = si.stop != null ? `Stop ${money(si.stop)}${si.dist != null ? ` · ${si.dist.toFixed(1)}% below` : ""}` : `<span class="warn">No stop set</span>`;
   return `<button class="row" data-act="stock" data-sym="${esc(p.symbol)}" style="align-items:flex-start">
     <div class="av">${esc(initials(p.symbol))}</div>
-    <div class="mid"><b>${esc(p.symbol)}</b><small>${num(p.qty)} × ${money(p.avg)} · ${p.days}d</small><small>${stopTxt}</small></div>
+    <div class="mid"><b>${esc(p.symbol)}</b><small>Qty ${num(p.qty)} of ${num(p.initQty)} · avg ${money(p.avg)} · ${p.days}d</small><small>${stopTxt}</small></div>
     <div class="end"><b>${money(p.price)}</b><small class="mut" style="font-weight:500">Value ${money(p.value, M, 0)}</small>
       <small class="${sgn(shown.abs)}">${shown.abs == null ? "–" : sgnm(shown.abs) + " (" + pct(shown.pct) + ")"}</small></div></button>`;
 }

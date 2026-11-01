@@ -146,6 +146,10 @@ def simulate(orders: list[dict], bars: dict[str, list[tuple]], cash: float, hold
             settle(oid, status="filled", status_note=f"filled {d} @ {px:g}")
             if o.get("oco_group"):
                 drop_group(o["oco_group"], oid, f"cancelled: the other leg filled {d}")
+            if o["side"] == "SELL" and holdings.get(o["symbol"], 0.0) <= 1e-9:      # position fully exited: its other sells are moot
+                for xid, x in st.items():
+                    if xid != oid and x["side"] == "SELL" and x["symbol"] == o["symbol"] and x["status"] == "pending":
+                        settle(xid, status="cancelled", status_note=f"cancelled: position fully exited {d}")
             for cid, c in st.items():                 # bracket children go live from the next session
                 if c["status"] == "waiting" and c.get("parent_id") == oid:
                     settle(cid, status="pending", after_date=d, status_note=None)
@@ -301,6 +305,7 @@ def run_user(store, uid: str, fetch=None) -> dict:
         store.put_prices(uid, t, [b[0] for b in rows], [round(b[4], 4) for b in rows], chart)
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     new_fills: list[dict] = []
+    settled: set = set()                      # order ids already updated by simulate in this run
     for p in ("IN", "US"):
         po = [o for o in o_u if o["portfolio"] == p]
         if not po:
@@ -311,6 +316,7 @@ def run_user(store, uid: str, fetch=None) -> dict:
             store.create_fill(uid, f["order_id"], {**f, "created_at": now})     # False = an earlier run already did this one
         for oid, patch in res["updates"].items():
             store.patch_order(uid, oid, patch)
+            settled.add(oid)
         for o in po:                          # flag a ticker Yahoo has no data for (possible typo)
             if o["id"] not in res["updates"] and o["yf"] in missing and not o.get("status_note"):
                 store.patch_order(uid, o["id"], {"status_note": f"no price data found for {o['yf']}"})
@@ -318,10 +324,14 @@ def run_user(store, uid: str, fetch=None) -> dict:
         print(f"{p}: {len(res['fills'])} fill(s), {len(res['updates'])} order update(s)")
         new_fills.extend({**f, "id": f"auto-{f['order_id']}"} for f in res["fills"])
     if any(o.get("pb") for o in orders):
-        made = run_playbooks(store, uid, orders, fills + new_fills, all_bars, ledger, settings, now)
+        exited: set = set()
+        made = run_playbooks(store, uid, orders, fills + new_fills, all_bars, ledger, settings, now, exited)
         summary["fills"] += made
         if made:
             print(f"playbook: {made} sell(s)")
+        for o in o_u:                         # a playbook exit also retires the symbol's other pending sells
+            if o["side"] == "SELL" and o["status"] == "pending" and o["id"] not in settled and (o["portfolio"], o["symbol"]) in exited:
+                store.patch_order(uid, o["id"], {"status": "cancelled", "status_note": "cancelled: position fully exited"})
     return summary
 
 
@@ -329,7 +339,7 @@ PB_LABEL = {"t1": "first profit target", "t2": "second profit target", "stop": "
 
 
 def run_playbooks(store, uid: str, orders: list[dict], fills: list[dict], all_bars: dict, ledger: list[dict],
-                  settings: dict, now: str) -> int:
+                  settings: dict, now: str, exited: set | None = None) -> int:
     """Apply the profit-booking playbook to every filled entry order that carries one. The whole history is
     replayed every run and each sell has a fixed id, so an earlier run's sells are never duplicated."""
     made = 0
@@ -373,6 +383,8 @@ def run_playbooks(store, uid: str, orders: list[dict], fills: list[dict], all_ba
                 held[(o["portfolio"], o["symbol"])] -= qty
                 have.add(key)
                 made += 1
+                if exited is not None and held[(o["portfolio"], o["symbol"])] <= 1e-9:
+                    exited.add((o["portfolio"], o["symbol"]))
         if res["state"] != o.get("pb_state"):
             store.patch_order(uid, o["id"], {"pb_state": res["state"]})
     return made

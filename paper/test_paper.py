@@ -105,6 +105,36 @@ class Simulation(unittest.TestCase):
         self.assertEqual(res["updates"]["o3"]["status"], "cancelled")
         self.assertEqual(res["holdings"]["ABC"], 0)
 
+    def test_full_exit_cancels_the_other_pending_sells_of_that_symbol(self):
+        bars = [bar("2026-10-02", 100, 101, 99, 100),
+                bar("2026-10-03", 100, 112, 94, 100)]     # the 95 stop is hit; the 120 limit sell never is
+        entry = order("o1", qty=10)
+        stop = order("o2", side="SELL", type="STOP", price=95, status="pending", after_date="2026-10-02")
+        lone = order("o3", side="SELL", type="LIMIT", price=120, status="pending", after_date="2026-10-02")   # not in the stop's OCO group
+        res = self.run_sim([entry, stop, lone], bars)
+        self.assertEqual(res["holdings"]["ABC"], 0)
+        self.assertEqual(res["updates"]["o3"]["status"], "cancelled")
+        self.assertIn("fully exited", res["updates"]["o3"]["status_note"])
+
+    def test_partial_exit_keeps_the_other_pending_sells(self):
+        bars = [bar("2026-10-02", 100, 101, 99, 100),
+                bar("2026-10-03", 100, 112, 94, 100)]
+        entry = order("o1", qty=10)
+        part = order("o2", side="SELL", type="STOP", price=95, status="pending", after_date="2026-10-02", qty=4)
+        rest = order("o3", side="SELL", type="LIMIT", price=120, status="pending", after_date="2026-10-02", qty=6)
+        res = self.run_sim([entry, part, rest], bars)
+        self.assertEqual(res["holdings"]["ABC"], 6)
+        self.assertNotIn("o3", res["updates"])
+
+    def test_waiting_children_of_a_new_entry_survive_an_exit(self):
+        bars = [bar("2026-10-02", 100, 101, 99, 100), bar("2026-10-03", 100, 112, 94, 100)]
+        old = order("o1", qty=10)
+        out = order("o2", side="SELL", type="STOP", price=95, status="pending", after_date="2026-10-02")
+        again = order("o4", qty=5, type="LIMIT", price=50)                       # never fills
+        kid = order("o5", side="SELL", type="STOP", price=45, status="waiting", parent_id="o4", qty=5)
+        res = self.run_sim([old, out, again, kid], bars)
+        self.assertNotIn("o5", res["updates"])
+
     def test_children_do_not_trigger_on_the_entry_session(self):
         bars = [bar("2026-10-02", 100, 120, 90, 100)]     # wild entry day
         res = self.run_sim([order("o1"), order("o2", side="SELL", type="STOP", price=95, status="waiting", parent_id="o1")], bars)

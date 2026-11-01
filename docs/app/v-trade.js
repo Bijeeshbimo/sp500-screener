@@ -13,6 +13,14 @@ ACT["ask-yes"] = () => { topLayer().yes = true; closeTop(); };
 ACT["ask-no"] = () => closeTop();
 
 async function afterWrite() { await reload(); compute(); render(); refreshLayers(); }
+const heldSyms = () => new Set(ACC ? ACC.positions.map(p => p.symbol) : []);
+/* A position that went from held to flat has no use for its other waiting sell orders: cancel them (same rule as the daily job). */
+async function exitSweep(before) {
+  const now = heldSyms(), gone = [...before].filter(x => !now.has(x));
+  const list = gone.length ? S.orders.filter(o => o.portfolio === M && o.side === "SELL" && o.status === "pending" && gone.includes(o.symbol)) : [];
+  for (const o of list) await STORE.update("orders", o.id, { status: "cancelled", status_note: "cancelled: position fully exited" });
+  return list.length;
+}
 const goTab = t => { TAB = t; render(); const v = $("#view"); if (v) v.scrollTop = 0; };
 
 /* ---------------------------------------------------------------- order ticket -- */
@@ -32,6 +40,8 @@ function ticketHtml(pref) {
       <div class="hint" id="tk-typeinfo" style="margin-top:6px"></div></div>
     <div class="g2"><label class="fld"><span>Quantity</span><div class="stepper"><button type="button" data-act="tkqty" data-d="-1">−</button><input name="qty" type="number" inputmode="${india ? "numeric" : "decimal"}" step="${india ? 1 : "any"}" value="${pref.qty || ""}"><button type="button" data-act="tkqty" data-d="1">+</button></div></label>
       <label class="fld" id="l-price"><span id="l-price-t">Price (${cur})</span><input name="price" type="number" inputmode="decimal" step="any" value="${esc(pref.px || "")}"></label></div>
+    <div id="pctrow" class="g1" hidden><div class="mut" style="font-size:12px;font-weight:600" id="pct-lbl"></div>
+      <div class="chipwrap">${[10, 25, 33, 50, 75, 100].map(n => `<button type="button" class="chip wrap" data-act="tkpct" data-v="${n}">${n}%</button>`).join("")}<button type="button" class="chip wrap" data-act="tkpct" data-v="all">All left</button></div></div>
     <div id="buyonly" class="g1">
       <div class="g2"><label class="fld"><span id="l-bstop-t">Stop-loss (${cur})</span><input name="bstop" type="number" inputmode="decimal" step="any" value="${esc(pref.stop || "")}" placeholder="optional"></label>
         <label class="fld"><span>Risk amount (${cur})</span><input name="risk" type="number" inputmode="decimal" step="any" value="${risk}"></label></div>
@@ -69,6 +79,9 @@ function openTicket(pref) {
     g("l-price-t").textContent = (t === "STOP" ? "Trigger price" : "Limit price") + ` (${cur})`;
     g("tk-typeinfo").textContent = t === "MARKET" ? "Fills at the next session's open." : t === "LIMIT" ? (s === "BUY" ? "Buys at your price or better." : "Sells at your price or better.") : (s === "BUY" ? "Buys once price rises to your trigger (a breakout entry)." : "Sells once price falls to your trigger (a stop-loss).");
     g("buyonly").hidden = s !== "BUY"; g("l-stopref").hidden = s !== "BUY";
+    const pos = ACC && ACC.positions.find(x => x.symbol === sym);
+    g("pctrow").hidden = !(s === "SELL" && pos);
+    if (pos) g("pct-lbl").textContent = `Sell a share of the initial ${num(pos.initQty)} (holding ${num(pos.qty)})`;
     const pbOn = s === "BUY" && f.elements.pb.checked;
     g("l-btgt").hidden = pbOn; g("l-bstop-t").textContent = (pbOn ? "Initial stop-loss, defines 1R" : "Stop-loss") + ` (${cur})`;
     const q = +val(f, "qty") || 0, ep = t === "MARKET" ? refPrice(sym, m) : +val(f, "price"), st = +val(f, "bstop") || +val(f, "stopref"), R = ep - st;
@@ -107,6 +120,13 @@ function openTicket(pref) {
   });
   f.addEventListener("change", () => { calc(); sync(); });
   L.apply = (patch) => { Object.keys(patch).forEach(k => { f.elements[k].value = patch[k]; }); calc(); sync(); };
+  L.setPct = v => {
+    const pos = ACC && ACC.positions.find(x => x.symbol === symOf()); if (!pos) return;
+    let q = v === "all" ? pos.qty : pos.initQty * (+v) / 100;
+    q = india ? Math.max(1, Math.round(q)) : Math.round(q * 1e4) / 1e4;       // whole shares for India, fractions for US
+    q = Math.min(q, pos.qty);                                                // never more than is held
+    f.elements.qty.value = q; driver = "qty"; calc(); sync();
+  };
   L.setQty = d => { const q = Math.max(0, (+val(f, "qty") || 0) + d); f.elements.qty.value = india ? Math.round(q) : q; driver = "qty"; calc(); sync(); };
   if (pref.stop) f.elements.stopref.value = pref.stop;
   calc(); sync();
@@ -144,6 +164,7 @@ function openTicket(pref) {
 ACT.neworder = () => openTicket();
 ACT.tkside = el => { const L = topLayer(); $("#tf", L.el).elements.side.value = el.dataset.v; $("#tf", L.el).dispatchEvent(new Event("change")); };
 ACT.tktype = el => { const L = topLayer(); $("#tf", L.el).elements.type.value = el.dataset.v; $("#tf", L.el).dispatchEvent(new Event("change")); };
+ACT.tkpct = el => topLayer().setPct(el.dataset.v);
 ACT.tkqty = el => topLayer().setQty(+el.dataset.d * (M === "IN" ? 1 : 1));
 
 /* ------------------------------------------------------------------ Orders tab -- */
@@ -267,8 +288,11 @@ function fillSheet(fl) {
     let fees = calc(); if (!f.elements.recalc.checked) { const t = nval(f, "fee"); if (t == null || t < 0) return errBox(f, "Enter the charges."); fees = { total: t, custom: true }; }
     const row = { portfolio: m, symbol: sym, yf: isNew ? toYf(sym, m) : fl.yf, side, qty: q, price: p, date: val(f, "date"), fees, fees_total: fees.total, stop_ref: side === "BUY" ? nval(f, "stopref") : null, tag: val(f, "tag") || null, note: val(f, "note") || null };
     try {
+      const before = heldSyms();
       if (isNew) await STORE.insert("fills", { ...row, order_id: null, source: "manual" }); else await STORE.update("fills", fl.id, { ...row, source: fl.source === "manual" ? "manual" : "edited" });
-      await afterWrite(); closeTop(); toast("Saved");
+      await reload(); compute();
+      const n = await exitSweep(before);
+      await afterWrite(); closeTop(); toast(n ? `Saved. ${n} pending sell order${n > 1 ? "s" : ""} cancelled (position exited).` : "Saved");
     } catch (x) { errBox(f, errText(x)); }
   };
 }
