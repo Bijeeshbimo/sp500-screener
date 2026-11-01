@@ -41,7 +41,7 @@ function ticketHtml(pref) {
     <div class="g2"><label class="fld"><span>Quantity</span><div class="stepper"><button type="button" data-act="tkqty" data-d="-1">−</button><input name="qty" type="number" inputmode="${india ? "numeric" : "decimal"}" step="${india ? 1 : "any"}" value="${pref.qty || ""}"><button type="button" data-act="tkqty" data-d="1">+</button></div></label>
       <label class="fld" id="l-price"><span id="l-price-t">Price (${cur})</span><input name="price" type="number" inputmode="decimal" step="any" value="${esc(pref.px || "")}"></label></div>
     <div id="pctrow" class="g1" hidden><div class="mut" style="font-size:12px;font-weight:600" id="pct-lbl"></div>
-      <div class="chipwrap">${[10, 25, 33, 50, 75, 100].map(n => `<button type="button" class="chip wrap" data-act="tkpct" data-v="${n}">${n}%</button>`).join("")}<button type="button" class="chip wrap" data-act="tkpct" data-v="all">All left</button></div></div>
+      <div class="chipwrap">${[10, 20, 25, 30, 50, 100].map(n => `<button type="button" class="chip wrap" data-act="tkpct" data-v="${n}">${n}%</button>`).join("")}<button type="button" class="chip wrap" data-act="tkpct" data-v="all">All left</button></div></div>
     <div id="buyonly" class="g1">
       <div class="g2"><label class="fld"><span id="l-bstop-t">Stop-loss (${cur})</span><input name="bstop" type="number" inputmode="decimal" step="any" value="${esc(pref.stop || "")}" placeholder="optional"></label>
         <label class="fld"><span>Risk amount (${cur})</span><input name="risk" type="number" inputmode="decimal" step="any" value="${risk}"></label></div>
