@@ -818,7 +818,7 @@ function editOrderDialog(o) {
 function stopDialog(sym) {
   const p = ACC.positions.find(x => x.symbol === sym), so = stopOrderFor(sym);
   const f = dlg(`<h3>${so ? "Move" : "Set"} stop: ${esc(sym)}</h3><p class="hint">Sell all ${num(p.qty)} shares if the price falls to the stop. Last close ${money(p.price)}.</p>
-    <div class="grid"><label>Stop price<input name="price" type="number" step="any" value="${so ? so.price : ""}"></label><label>Fill from sessions after<input name="after" type="date" value="${so ? esc(so.after_date) : lastSession()}"></label></div>${acts("Save stop")}`);
+    <div class="grid"><label>Stop price<input name="price" type="number" step="any" value="${so ? so.price : ""}"></label><label>Fill from sessions after<input name="after" type="date" value="${lastSession()}"></label></div>${acts("Save stop")}`);
   f.onsubmit = async e => { e.preventDefault(); const px = nval(f, "price"); if (!(px > 0)) return err(f, "Enter a stop price."); if (px >= p.price) return err(f, "A stop sits below the current price; otherwise it would trigger immediately.");
     await guard(f, async () => { if (so) await STORE.update("orders", so.id, { price: px, qty: p.qty, after_date: val(f, "after") });
       else await STORE.insert("orders", { portfolio: M, symbol: sym, yf: p.yf, side: "SELL", type: "STOP", qty: p.qty, price: px, after_date: val(f, "after"), expiry: null, oco_group: null, parent_id: null, stop_ref: null, tag: p.tag || null, note: null, status: "pending" });
