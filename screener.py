@@ -401,12 +401,12 @@ def load_india_constituents() -> tuple[pd.DataFrame, dict]:
 PRICE_COLS = ["Open", "High", "Low", "Close", "Volume"]
 
 
-def _download(chunk: list[str]) -> dict[str, pd.DataFrame]:
+def _download(chunk: list[str], period: str | None = None) -> dict[str, pd.DataFrame]:
     import yfinance as yf
 
     # auto_adjust=False -> prices are split-adjusted but not dividend-adjusted,
     # which is what most charting platforms show.
-    data = yf.download(chunk, period=HISTORY_PERIOD, interval="1d", auto_adjust=False,
+    data = yf.download(chunk, period=period or HISTORY_PERIOD, interval="1d", auto_adjust=False,
                        group_by="ticker", threads=True, progress=False)
     out: dict[str, pd.DataFrame] = {}
     for t in chunk:
@@ -467,9 +467,13 @@ def retry_stale(prices: dict, cfg: dict, rounds: int = 3, wait: int = 25, budget
         time.sleep(wait if n else 5)
         got = 0
         for i in range(0, len(stale), 25):
-            for t, df in _download(stale[i:i + 25]).items():
-                if df.index[-1].date() > last[t]:
-                    prices[t] = df
+            # Yahoo can keep serving a stale cached copy of the long (3y) request while a short one is already current,
+            # so ask for the last month and append only the days the long history is missing.
+            for t, recent in _download(stale[i:i + 25], period="1mo").items():
+                old = prices[t]
+                extra = recent[recent.index > old.index[-1]]
+                if len(extra):
+                    prices[t] = pd.concat([old, extra])
                     got += 1
             if time.time() - start > budget:
                 break
