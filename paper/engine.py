@@ -246,7 +246,33 @@ def fetch_bars(yfs: list[str], start: str) -> dict[str, list[tuple]]:
             sub = sc.drop_incomplete_today(sub, m["tz"], m["close"])
             out[t] = [(ix.strftime("%Y-%m-%d"), float(r.Open), float(r.High), float(r.Low), float(r.Close))
                       for ix, r in sub.iterrows()]
+    catch_up_stale(out)
     return out
+
+
+def catch_up_stale(out: dict[str, list[tuple]]) -> None:
+    """Yahoo can serve an older last candle for some tickers inside a multi-ticker request while the ticker asked for
+    on its own is already current. Re-ask for such stragglers one at a time and append the missing sessions."""
+    import screener as sc
+
+    for india in (True, False):
+        grp = {t: rows for t, rows in out.items() if rows and (t.endswith(".NS") or t == BENCH["IN"]) == india}
+        if not grp:
+            continue
+        newest = max(rows[-1][0] for rows in grp.values())
+        m = sc.MARKETS["IN" if india else "US"]
+        for t, rows in grp.items():
+            gap = (dt.date.fromisoformat(newest) - dt.date.fromisoformat(rows[-1][0])).days
+            if not 0 < gap <= 5:
+                continue
+            try:
+                recent = sc.drop_incomplete_today(sc.fetch_recent_one(t), m["tz"], m["close"])
+            except Exception:
+                continue
+            for ix, r in recent.iterrows():
+                d = ix.strftime("%Y-%m-%d")
+                if d > rows[-1][0]:
+                    rows.append((d, float(r.Open), float(r.High), float(r.Low), float(r.Close)))
 
 
 def write_fx() -> None:

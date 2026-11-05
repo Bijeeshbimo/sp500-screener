@@ -447,6 +447,19 @@ def drop_incomplete_today(df: pd.DataFrame, tz: str = "America/New_York", close:
     return df
 
 
+def fetch_recent_one(t: str, period: str = "1mo") -> pd.DataFrame:
+    """The last `period` of daily bars for ONE ticker. Yahoo can serve stale candles inside a multi-ticker request while
+    asking for the ticker on its own returns the new session, so catching up is done one ticker at a time."""
+    import yfinance as yf
+
+    df = yf.Ticker(t).history(period=period, interval="1d", auto_adjust=False)
+    if df is None or df.empty:
+        return pd.DataFrame(columns=PRICE_COLS)
+    df = df[PRICE_COLS].dropna(subset=["Open", "High", "Low", "Close"])
+    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
+    return df
+
+
 def retry_stale(prices: dict, cfg: dict, rounds: int = 3, wait: int = 25, budget: int = 240) -> dict:
     """Yahoo posts a session's candle for different tickers at different moments, so soon after a close a share of
     tickers can still end on the previous session even though a re-request seconds later returns the new one.
@@ -466,17 +479,22 @@ def retry_stale(prices: dict, cfg: dict, rounds: int = 3, wait: int = 25, budget
         print(f"  retry {n + 1}: {len(stale)} of {len(last)} tickers still end before {newest}")
         time.sleep(wait if n else 5)
         got = 0
-        for i in range(0, len(stale), 25):
-            # Yahoo can keep serving a stale cached copy of the long (3y) request while a short one is already current,
-            # so ask for the last month and append only the days the long history is missing.
-            for t, recent in _download(stale[i:i + 25], period="1mo").items():
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(t):
+            try:
+                return t, fetch_recent_one(t)
+            except Exception:
+                return t, None
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for t, recent in ex.map(one, stale):
+                if recent is None or not len(recent):
+                    continue
                 old = prices[t]
                 extra = recent[recent.index > old.index[-1]]
                 if len(extra):
                     prices[t] = pd.concat([old, extra])
                     got += 1
-            if time.time() - start > budget:
-                break
         print(f"  retry {n + 1}: {got} caught up")
         if not got:
             return prices
