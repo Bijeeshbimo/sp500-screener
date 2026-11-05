@@ -447,6 +447,38 @@ def drop_incomplete_today(df: pd.DataFrame, tz: str = "America/New_York", close:
     return df
 
 
+def retry_stale(prices: dict, cfg: dict, rounds: int = 3, wait: int = 25, budget: int = 240) -> dict:
+    """Yahoo posts a session's candle for different tickers at different moments, so soon after a close a share of
+    tickers can still end on the previous session even though a re-request seconds later returns the new one.
+    Re-fetch just those stragglers (a few rounds, only while each round recovers some) before the market is screened.
+    Tickers that have been stale for more than a few days (suspended, delisted) are left alone."""
+    import time
+
+    start = time.time()
+    for n in range(rounds):
+        last = {t: drop_incomplete_today(df, cfg["tz"], cfg["close"]).index[-1].date() for t, df in prices.items() if len(df) > 1}
+        if not last:
+            return prices
+        newest = max(last.values())
+        stale = [t for t, d in last.items() if d < newest and (newest - d).days <= 5]
+        if not stale or time.time() - start > budget:
+            return prices
+        print(f"  retry {n + 1}: {len(stale)} of {len(last)} tickers still end before {newest}")
+        time.sleep(wait if n else 5)
+        got = 0
+        for i in range(0, len(stale), 25):
+            for t, df in _download(stale[i:i + 25]).items():
+                if df.index[-1].date() > last[t]:
+                    prices[t] = df
+                    got += 1
+            if time.time() - start > budget:
+                break
+        print(f"  retry {n + 1}: {got} caught up")
+        if not got:
+            return prices
+    return prices
+
+
 # ------------------------------------------------------------------- page ---
 TEMPLATE = r"""<!doctype html>
 <html lang="en">
@@ -1365,7 +1397,7 @@ def main() -> int:
     for code, cfg in MARKETS.items():
         try:
             cons, loaded = load_universe(code)
-            prices = download_prices(cons["yf"].tolist())
+            prices = retry_stale(download_prices(cons["yf"].tolist()), cfg)
             payloads[code] = process_market(code, cons, prices, loaded)
             save_cache(code, payloads[code])           # last good result, reused if a later refresh fails
             refreshed += 1
