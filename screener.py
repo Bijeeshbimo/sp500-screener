@@ -447,8 +447,8 @@ def drop_incomplete_today(df: pd.DataFrame, tz: str = "America/New_York", close:
     return df
 
 
-def fetch_recent_one(t: str, period: str = "1mo") -> pd.DataFrame:
-    """The last `period` of daily bars for ONE ticker. Yahoo can serve stale candles inside a multi-ticker request while
+def fetch_recent_one(t: str, period: str = "5d") -> pd.DataFrame:
+    """The last `period` (5 days by default: Yahoo serves stale copies of some other ranges) of daily bars for ONE ticker. Yahoo can serve stale candles inside a multi-ticker request while
     asking for the ticker on its own returns the new session, so catching up is done one ticker at a time."""
     import yfinance as yf
 
