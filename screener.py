@@ -401,12 +401,12 @@ def load_india_constituents() -> tuple[pd.DataFrame, dict]:
 PRICE_COLS = ["Open", "High", "Low", "Close", "Volume"]
 
 
-def _download(chunk: list[str], period: str | None = None) -> dict[str, pd.DataFrame]:
+def _download(chunk: list[str]) -> dict[str, pd.DataFrame]:
     import yfinance as yf
 
     # auto_adjust=False -> prices are split-adjusted but not dividend-adjusted,
     # which is what most charting platforms show.
-    data = yf.download(chunk, period=period or HISTORY_PERIOD, interval="1d", auto_adjust=False,
+    data = yf.download(chunk, period=HISTORY_PERIOD, interval="1d", auto_adjust=False,
                        group_by="ticker", threads=True, progress=False)
     out: dict[str, pd.DataFrame] = {}
     for t in chunk:
@@ -445,60 +445,6 @@ def drop_incomplete_today(df: pd.DataFrame, tz: str = "America/New_York", close:
     if df.index[-1].date() == now.date() and now < ready:
         return df.iloc[:-1]
     return df
-
-
-def fetch_recent_one(t: str, period: str = "5d") -> pd.DataFrame:
-    """The last `period` (5 days by default: Yahoo serves stale copies of some other ranges) of daily bars for ONE ticker. Yahoo can serve stale candles inside a multi-ticker request while
-    asking for the ticker on its own returns the new session, so catching up is done one ticker at a time."""
-    import yfinance as yf
-
-    df = yf.Ticker(t).history(period=period, interval="1d", auto_adjust=False)
-    if df is None or df.empty:
-        return pd.DataFrame(columns=PRICE_COLS)
-    df = df[PRICE_COLS].dropna(subset=["Open", "High", "Low", "Close"])
-    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
-    return df
-
-
-def retry_stale(prices: dict, cfg: dict, rounds: int = 3, wait: int = 25, budget: int = 240) -> dict:
-    """Yahoo posts a session's candle for different tickers at different moments, so soon after a close a share of
-    tickers can still end on the previous session even though a re-request seconds later returns the new one.
-    Re-fetch just those stragglers (a few rounds, only while each round recovers some) before the market is screened.
-    Tickers that have been stale for more than a few days (suspended, delisted) are left alone."""
-    import time
-
-    start = time.time()
-    for n in range(rounds):
-        last = {t: drop_incomplete_today(df, cfg["tz"], cfg["close"]).index[-1].date() for t, df in prices.items() if len(df) > 1}
-        if not last:
-            return prices
-        newest = max(last.values())
-        stale = [t for t, d in last.items() if d < newest and (newest - d).days <= 5]
-        if not stale or time.time() - start > budget:
-            return prices
-        print(f"  retry {n + 1}: {len(stale)} of {len(last)} tickers still end before {newest}")
-        time.sleep(wait if n else 5)
-        got = 0
-        from concurrent.futures import ThreadPoolExecutor
-
-        def one(t):
-            try:
-                return t, fetch_recent_one(t)
-            except Exception:
-                return t, None
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            for t, recent in ex.map(one, stale):
-                if recent is None or not len(recent):
-                    continue
-                old = prices[t]
-                extra = recent[recent.index > old.index[-1]]
-                if len(extra):
-                    prices[t] = pd.concat([old, extra])
-                    got += 1
-        print(f"  retry {n + 1}: {got} caught up")
-        if not got:
-            return prices
-    return prices
 
 
 # ------------------------------------------------------------------- page ---
@@ -754,6 +700,7 @@ function setMarket(code) {
   if (META.failed.length) warn("Not loaded on this run: " + META.failed.join(", ") + ".");
   for (const n of META.notes || []) warn(n);
   if (META.stale) warn(META.stale);
+  if (META.coverage) warn(META.coverage);
   $("foot2").textContent = CFG.footNote;
   setMarketDefaults();
   try { localStorage.setItem("market", code); } catch (e) {}
@@ -1274,6 +1221,12 @@ def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) ->
 
     data_date = pd.Series(dates).mode().iloc[0]        # ignore stragglers with stale last bars
     print(f"  last-bar dates ({code}): " + ", ".join(f"{d} x{n}" for d, n in pd.Series(dates).value_counts().head(4).items()) + f"; using {data_date}")
+    behind = [d for d in dates if d < data_date and (pd.Timestamp(data_date) - pd.Timestamp(d)).days <= 5]
+    coverage = ""
+    if len(behind) >= max(3, 0.02 * len(dates)):          # Yahoo posts a session's candles unevenly: say so instead of silently dropping them
+        coverage = (f"Yahoo had posted the {data_date} candle for only {len(dates) - len(behind)} of {len(dates)} stocks when this ran, "
+                    f"so the other {len(behind)} are left out. A later run fills them in once Yahoo catches up.")
+        print("  " + coverage)
     rows = [r for r in rows if r.pop("date") == data_date]
     ranks = rs_ranks({k: v for k, (d, v) in ret6.items() if d == data_date})
     pairs = []
@@ -1294,6 +1247,7 @@ def process_market(code: str, cons: pd.DataFrame, prices: dict, loaded: dict) ->
         "indices": [{"code": c, "label": v["label"], "count": v["count"]} for c, v in loaded.items()],
         "failed": [label for c, label in expected_sources(code, loaded) if c not in loaded],
         "notes": [v["note"] for v in loaded.values() if v.get("note")],
+        "coverage": coverage,
         "cfg": page_cfg(code),
     }
     return {"rows": rows, "meta": meta}
@@ -1419,7 +1373,7 @@ def main() -> int:
     for code, cfg in MARKETS.items():
         try:
             cons, loaded = load_universe(code)
-            prices = retry_stale(download_prices(cons["yf"].tolist()), cfg)
+            prices = download_prices(cons["yf"].tolist())
             payloads[code] = process_market(code, cons, prices, loaded)
             save_cache(code, payloads[code])           # last good result, reused if a later refresh fails
             refreshed += 1

@@ -29,6 +29,9 @@ function notices() {
   let h = "";
   if (STORE && STORE.mode === "demo") h += `<div class="banner">Demo mode: your data stays on this phone and orders are never filled. Connect Firebase in <b>config.js</b> to sync with your account.</div>`;
   if (NEWDATA) h += `<div class="banner ok">New screener data is available. <button data-act="refresh">Load it</button></div>`;
+  const mm = MD[M] && MD[M].meta;
+  if (mm && mm.coverage) h += `<div class="banner">${esc(mm.coverage)}</div>`;
+  if (mm && mm.stale) h += `<div class="banner">${esc(mm.stale)}</div>`;
   if (OFFLINE) h += `<div class="banner">You are offline: showing the last data saved on this phone.</div>`;
   if (BLK.unpriced) h += `<div class="banner">${BLK.unpriced} pending market buy order(s) have no known price yet, so their funds are not counted.</div>`;
   if (ACC && ACC.cash < -0.005) h += `<div class="banner err">Cash is negative. A deposit is missing, or a trade was entered or edited with the wrong amount. Check Funds and the executed orders.</div>`;
