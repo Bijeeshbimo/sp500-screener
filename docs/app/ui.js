@@ -225,6 +225,8 @@ function blockedFunds(m) {
   return out;
 }
 function compute() {
+  /* until the daily engine records it, an order whose expiry session has closed already counts as expired */
+  S.orders.forEach(o => { if (o.status === "pending" && o.expiry && SESS[o.portfolio] && SESS[o.portfolio] >= o.expiry) { o.status = "expired"; o.status_note = o.status_note || "expired unfilled"; } });
   const lg = S.ledger.filter(r => r.portfolio === M), fl = S.fills.filter(r => r.portfolio === M);
   ACC = PC.buildAccount(lg, fl, PM, MKT[M].bench);
   BLK = blockedFunds(M);

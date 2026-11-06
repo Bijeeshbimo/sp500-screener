@@ -153,6 +153,17 @@ def simulate(orders: list[dict], bars: dict[str, list[tuple]], cash: float, hold
             for cid, c in st.items():                 # bracket children go live from the next session
                 if c["status"] == "waiting" and c.get("parent_id") == oid:
                     settle(cid, status="pending", after_date=d, status_note=None)
+    # an order that may run "after <expiry>" is done once the session on that date is complete
+    last = max((d for m in bar_by.values() for d in m), default=None)
+    if last:
+        for oid, o in list(st.items()):
+            if o["status"] == "pending" and o.get("expiry") and last >= o["expiry"]:
+                settle(oid, status="expired", status_note="expired unfilled")
+        for oid, o in list(st.items()):
+            if o["status"] == "waiting":
+                par = st.get(o["parent_id"])
+                if par is not None and par["status"] in ("cancelled", "expired", "rejected"):
+                    settle(oid, status="cancelled", status_note="entry order did not fill")
     return {"fills": fills, "updates": updates, "cash": cash, "holdings": holdings}
 
 

@@ -165,6 +165,13 @@ class Simulation(unittest.TestCase):
         res = self.run_sim([order("o1", type="LIMIT", price=90)], bars)
         self.assertEqual(res["updates"], {})                 # still pending, nothing to write
 
+    def test_expires_as_soon_as_expiry_session_closes(self):
+        bars = [bar("2026-10-02", 100, 101, 99, 100), bar("2026-10-03", 100, 101, 99, 100)]
+        res = self.run_sim([order("o1", type="LIMIT", price=90, expiry="2026-10-03")], bars)
+        self.assertEqual(res["updates"]["o1"]["status"], "expired")
+        res = self.run_sim([order("o1", type="LIMIT", price=90, expiry="2026-10-06")], bars)
+        self.assertEqual(res["updates"], {})
+
     def test_dp_charge_taken_once_per_stock_per_day(self):
         bars = [bar("2026-10-02", 100, 101, 99, 100)]
         orders = [order("o1", side="SELL", qty=4), order("o2", side="SELL", qty=6)]
