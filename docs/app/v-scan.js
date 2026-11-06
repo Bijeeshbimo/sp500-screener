@@ -34,7 +34,7 @@ Views.scan = function () {
       <label class="fld" style="flex:1"><input data-in="q" type="search" placeholder="Search symbol or name" value="${esc(f.q)}" autocomplete="off" style="height:44px"></label>
       <button class="ibtn" data-act="filters" aria-label="Filters" style="width:44px;height:44px">${icon("filter")}${n ? `<span class="dot"></span>` : ""}</button></div>
     <div><div class="mut" style="font-size:12px;font-weight:600;margin-bottom:6px">Breakout above the previous ___ session high</div><div class="chips">${chips}</div></div>
-    <div class="sortbar"><span id="scan-count">${sc.matched.toLocaleString()} match${sc.matched === 1 ? "" : "es"} · ${esc(d.meta.date)} close${n ? ` · ${n} filter${n > 1 ? "s" : ""} on` : ""}</span>
+    <div class="sortbar"><span id="scan-count">${sc.matched.toLocaleString()} match${sc.matched === 1 ? "" : "es"} · ${esc(fmtDate(d.meta.date))} close${n ? ` · ${n} filter${n > 1 ? "s" : ""} on` : ""}</span>
       <span style="display:flex;gap:6px;align-items:center"><select data-in="sort" aria-label="Sort by">${SC.SORTS.map(s => `<option value="${s.k}"${f.sort === s.k ? " selected" : ""}>${s.t}</option>`).join("")}</select>
       <button class="ibtn" data-act="toggleasc" aria-label="Reverse order" style="width:34px;height:34px;border-radius:10px">${f.asc ? "↑" : "↓"}</button></span></div>
     <div id="scan-list">${scanList()}</div>
@@ -115,7 +115,7 @@ function stockHtml(sym, m) {
   const name = r ? r.name + (r.sector ? " · " + r.sector : "") : (p ? "Your position" : "");
   const close = r ? r.close : p ? p.price : null, chg = r ? r.chg : null;
   let body = "";
-  body += `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-end"><div><div class="mut" style="font-size:12px">${r ? "Last close · " + esc(d.meta.date) : p && p.priceDate ? "Last close · " + esc(p.priceDate) : "Last price"}</div>
+  body += `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-end"><div><div class="mut" style="font-size:12px">${r ? "Last close · " + esc(fmtDate(d.meta.date)) : p && p.priceDate ? "Last close · " + esc(p.priceDate) : "Last price"}</div>
       <div style="font-size:30px;font-weight:800;letter-spacing:-.02em">${money(close, m)}</div></div>${chg != null ? `<span class="pill ${chg >= 0 ? "up" : "dn"}" style="font-size:14px;padding:4px 10px">${pct(chg)}</span>` : ""}</div></div>`;
 
   // chart

@@ -32,6 +32,26 @@ const yahooUrl = (sym, m) => "https://finance.yahoo.com/quote/" + encodeURICompo
 const val = (f, n) => f.elements[n].value.trim();
 const nval = (f, n) => { const v = val(f, n); return v === "" ? null : +v; };
 
+/* ---- dates: shown as DD/MM/YYYY, stored as ISO (YYYY-MM-DD) ---- */
+const fmtDate = iso => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(iso || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ""); };
+const parseDMY = t => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t.trim()); if (!m) return ""; const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])); return d.getUTCFullYear() === +m[3] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[1] ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : ""; };
+const nextTradingDay = iso => { const d = new Date(iso + "T00:00:00Z"); do d.setUTCDate(d.getUTCDate() + 1); while (d.getUTCDay() === 0 || d.getUTCDay() === 6); return d.toISOString().slice(0, 10); };
+/* a text box the person types DD/MM/YYYY into, a calendar button, and a hidden input (name) that holds the ISO value */
+const dateField = (name, iso) => `<span class="dfld"><input class="dtxt" type="text" inputmode="numeric" maxlength="10" placeholder="DD/MM/YYYY" autocomplete="off" value="${esc(fmtDate(iso))}"><input type="hidden" name="${name}" value="${esc(iso || "")}"><button type="button" class="dcal" tabindex="-1" aria-label="Pick a date"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button><input class="dnat" type="date" tabindex="-1" aria-hidden="true" value="${esc(iso || "")}"></span>`;
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.classList || !t.classList.contains("dtxt")) return;
+  const w = t.parentNode, h = $("input[type=hidden]", w), n = $(".dnat", w);
+  if (e.inputType && e.inputType.startsWith("delete")) { /* let them delete freely */ } else { const dg = t.value.replace(/\D/g, "").slice(0, 8); t.value = dg.length > 4 ? `${dg.slice(0, 2)}/${dg.slice(2, 4)}/${dg.slice(4)}` : dg.length > 2 ? `${dg.slice(0, 2)}/${dg.slice(2)}` : dg; }
+  const iso = parseDMY(t.value); h.value = iso; n.value = iso; t.classList.toggle("bad", !!t.value && !iso);
+  h.dispatchEvent(new Event("change", { bubbles: true }));
+});
+document.addEventListener("change", e => {
+  const n = e.target; if (!n.classList || !n.classList.contains("dnat")) return;
+  const w = n.parentNode; $(".dtxt", w).value = fmtDate(n.value); $("input[type=hidden]", w).value = n.value; $(".dtxt", w).classList.remove("bad");
+  $("input[type=hidden]", w).dispatchEvent(new Event("change", { bubbles: true }));
+});
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest(".dcal"); if (!b) return; const n = $(".dnat", b.parentNode); try { n.showPicker(); } catch (_) { n.focus(); n.click(); } });
+
 const ICONS = {
   home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
   scan: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 13l2.5-2.5 2 2L15 9.5"/>',

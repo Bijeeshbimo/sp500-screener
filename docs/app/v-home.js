@@ -65,7 +65,7 @@ Views.home = function () {
     h += `<div class="sec"><h2>Breakouts today</h2><button data-act="tab" data-v="scan">See all ${sc.matched}</button></div>`;
     if (sc.list.length) h += `<div class="hscroll">${sc.list.slice(0, 8).map(miniCard).join("")}</div>`;
     else h += emptyBox("🔍", "No matches", "Nothing passes the " + f.N + "-session breakout with your filters.", `<button class="btn sm brand" data-act="tab" data-v="scan">Adjust filters</button>`);
-    h += `<div class="card note">${d.meta.scanned.toLocaleString()} stocks scanned for the ${esc(d.meta.date)} close · refreshed ${esc(d.meta.generated)}. These are chart observations, not advice.</div>`;
+    h += `<div class="card note">${d.meta.scanned.toLocaleString()} stocks scanned for the ${esc(fmtDate(d.meta.date))} close · refreshed ${esc(d.meta.generated)}. These are chart observations, not advice.</div>`;
   }
   return h + '</div></div>';
 };

@@ -44,7 +44,7 @@ function fundsHtml() {
   const rows = lg.map(r => {
     const mt = r.meta || {};
     const det = M === "US" && r.kind === "deposit" ? `${money(r.inr, "IN", 2)} at ₹${num(mt.rate, 4)}${mt.tcs ? " · TCS ₹" + num(mt.tcs, 2) : ""}` : esc(r.note || "");
-    return `<div class="row"><div class="av" style="${r.kind === "deposit" ? "" : "background:var(--dn-soft);color:var(--dn)"}">${r.kind === "deposit" ? "+" : "−"}</div><div class="mid"><b>${r.kind === "deposit" ? "Deposit" : "Withdrawal"}</b><small>${esc(r.date)}${det ? " · " + det : ""}</small></div>
+    return `<div class="row"><div class="av" style="${r.kind === "deposit" ? "" : "background:var(--dn-soft);color:var(--dn)"}">${r.kind === "deposit" ? "+" : "−"}</div><div class="mid"><b>${r.kind === "deposit" ? "Deposit" : "Withdrawal"}</b><small>${esc(fmtDate(r.date))}${det ? " · " + det : ""}</small></div>
       <div class="end"><b class="${r.kind === "deposit" ? "up" : "dn"}">${r.kind === "deposit" ? "+" : "−"}${money(r.amount)}</b><small><span class="lnk" data-act="editfund" data-id="${r.id}">Edit</span> &nbsp; <span class="lnk" style="color:var(--dn)" data-act="delfund" data-id="${r.id}">Delete</span></small></div></div>`;
   }).join("");
   return pageHead("Funds", MKT[M].name + " portfolio") + `<div class="page-in"><div class="card"><div class="kv"><div><small>Cash</small><b>${money(ACC.cash)}</b></div><div><small>Available to trade</small><b>${money(avail())}</b></div>
@@ -62,7 +62,7 @@ function addFundsSheet(existing) {
   if (m === "IN") {
     openSheet(`${sheetHead(existing ? "Edit deposit" : "Add funds", "India · rupees")}<form id="ff2" class="sheet-in g1" novalidate>
       <label class="fld"><span>Amount (₹)</span><input name="amt" type="number" step="any" inputmode="decimal" value="${existing ? existing.amount : ""}" style="font-size:22px;height:56px"></label>${existing ? "" : quickChips()}
-      <label class="fld"><span>Date</span><input name="date" type="date" value="${existing ? existing.date : today()}"></label><label class="fld"><span>Note</span><input name="note" value="${esc(existing ? existing.note : "")}"></label>
+      <label class="fld"><span>Date</span>${dateField("date", existing ? existing.date : today())}</label><label class="fld"><span>Note</span><input name="note" value="${esc(existing ? existing.note : "")}"></label>
       <div class="err" role="alert"></div></form><div class="sheet-ft"><button class="btn brand block" type="submit" form="ff2">${existing ? "Save" : "Add funds"}</button></div>`);
     const f = $("#ff2", topLayer().el);
     f.onsubmit = async e => {
@@ -77,11 +77,11 @@ function addFundsSheet(existing) {
   const defRate = ref ? PC.defaultRate(ref, S.settings) : PC.defaultRate(S.settings.fx.fallback_rate, S.settings);
   openSheet(`${sheetHead(existing ? "Edit deposit" : "Add funds", "US stocks · enter rupees, get dollars")}<form id="ff2" class="sheet-in g1" novalidate>
     <label class="fld"><span>Amount to send (₹)</span><input name="inr" type="number" step="any" inputmode="decimal" value="${existing ? existing.inr : ""}" style="font-size:22px;height:56px"></label>${existing ? "" : quickChips()}
-    <div class="g2"><label class="fld"><span>Exchange rate (₹ per $)</span><input name="rate" type="number" step="any" inputmode="decimal" value="${existing ? ex.rate : defRate}"></label><label class="fld"><span>Date</span><input name="date" type="date" value="${existing ? existing.date : today()}"></label>
+    <div class="g2"><label class="fld"><span>Exchange rate (₹ per $)</span><input name="rate" type="number" step="any" inputmode="decimal" value="${existing ? ex.rate : defRate}"></label><label class="fld"><span>Date</span>${dateField("date", existing ? existing.date : today())}</label>
       <label class="fld"><span>GST (₹)</span><input name="gst" type="number" step="any" inputmode="decimal" placeholder="auto" value="${existing && ex.gst_manual ? ex.gst : ""}"></label>
       <label class="fld"><span>Bank charge (₹)</span><input name="bank" type="number" step="any" inputmode="decimal" placeholder="auto" value="${existing && ex.bank_manual ? ex.bank : ""}"></label>
       <label class="fld"><span>Pay-in charge ($)</span><input name="payin" type="number" step="any" inputmode="decimal" placeholder="auto" value="${existing && ex.payin_manual ? ex.payin_fee_usd : ""}"></label></div>
-    <p class="hint" style="margin:0">${existing ? "Rate shown is the one saved with this deposit." : (ref ? `Rate pre-filled from the USD/INR close of ${esc(FX.date)} (₹${ref}) plus a ${S.settings.fx.markup_pct}% markup.` : "Rate pre-filled from your fallback rate.")} Type over the rate or any charge to match what Dhan shows; leave a charge blank to calculate it.</p>
+    <p class="hint" style="margin:0">${existing ? "Rate shown is the one saved with this deposit." : (ref ? `Rate pre-filled from the USD/INR close of ${esc(fmtDate(FX.date))} (₹${ref}) plus a ${S.settings.fx.markup_pct}% markup.` : "Rate pre-filled from your fallback rate.")} Type over the rate or any charge to match what Dhan shows; leave a charge blank to calculate it.</p>
     <label class="chk"><input type="checkbox" name="tcs" ${ex.tcs || S.settings.fx.tcs_enabled ? "checked" : ""}><span>Include TCS (20% above ₹10 lakh sent this financial year)</span></label>
     <div class="brk" id="brk"></div><label class="fld"><span>Note</span><input name="note" value="${esc(existing ? existing.note : "")}"></label><div class="err" role="alert"></div></form>
     <div class="sheet-ft"><button class="btn brand block" type="submit" form="ff2">${existing ? "Save" : "Add funds"}</button></div>`);
@@ -113,7 +113,7 @@ ACT.addfunds = () => addFundsSheet();
 ACT.withdraw = () => {
   openSheet(`${sheetHead("Withdraw", MKT[M].name + " portfolio")}<form id="wf" class="sheet-in g1" novalidate>
     <label class="fld"><span>Amount (${MKT[M].cur})</span><input name="amt" type="number" step="any" inputmode="decimal" style="font-size:22px;height:56px"></label>
-    <label class="fld"><span>Date</span><input name="date" type="date" value="${today()}"></label>
+    <label class="fld"><span>Date</span>${dateField("date", today())}</label>
     <p class="hint" style="margin:0">Available to withdraw: ${money(avail())}${BLK.total ? ` (cash ${money(ACC.cash)}, ${money(BLK.total)} blocked on pending orders)` : ""}. ${M === "US" ? "Withdrawals from Dhan US Stocks are free." : ""}</p>
     <label class="fld"><span>Note</span><input name="note"></label><div class="err" role="alert"></div></form><div class="sheet-ft"><button class="btn brand block" type="submit" form="wf">Withdraw</button></div>`);
   const f = $("#wf", topLayer().el);
@@ -126,7 +126,7 @@ ACT.withdraw = () => {
 ACT.editfund = el => {
   const r = S.ledger.find(x => x.id === el.dataset.id); if (!r) return;
   if (r.kind === "deposit") return addFundsSheet(r);
-  openSheet(`${sheetHead("Edit withdrawal")}<form id="wf" class="sheet-in g1" novalidate><label class="fld"><span>Amount</span><input name="amt" type="number" step="any" inputmode="decimal" value="${r.amount}"></label><label class="fld"><span>Date</span><input name="date" type="date" value="${r.date}"></label><label class="fld"><span>Note</span><input name="note" value="${esc(r.note || "")}"></label><div class="err" role="alert"></div></form><div class="sheet-ft"><button class="btn brand block" type="submit" form="wf">Save</button></div>`);
+  openSheet(`${sheetHead("Edit withdrawal")}<form id="wf" class="sheet-in g1" novalidate><label class="fld"><span>Amount</span><input name="amt" type="number" step="any" inputmode="decimal" value="${r.amount}"></label><label class="fld"><span>Date</span>${dateField("date", r.date)}</label><label class="fld"><span>Note</span><input name="note" value="${esc(r.note || "")}"></label><div class="err" role="alert"></div></form><div class="sheet-ft"><button class="btn brand block" type="submit" form="wf">Save</button></div>`);
   const f = $("#wf", topLayer().el);
   f.onsubmit = async e => { e.preventDefault(); const a = nval(f, "amt"); if (!(a > 0)) return errBox(f, "Enter an amount.");
     try { await STORE.update("ledger", r.id, { amount: a, date: val(f, "date"), note: val(f, "note") || null }); await afterWrite(); closeTop(); } catch (x) { errBox(f, errText(x)); } };
@@ -135,7 +135,7 @@ ACT.delfund = async el => {
   const r = S.ledger.find(x => x.id === el.dataset.id); if (!r) return;
   const without = PC.buildAccount(S.ledger.filter(x => x.portfolio === M && x.id !== r.id), S.fills.filter(x => x.portfolio === M), PM, MKT[M].bench);
   if (r.kind === "deposit" && without.cash < -0.005) return toast("Deleting this deposit would leave cash negative.");
-  if (!await ask("Delete this " + r.kind + "?", money(r.amount) + " on " + esc(r.date), "Delete", true)) return;
+  if (!await ask("Delete this " + r.kind + "?", money(r.amount) + " on " + esc(fmtDate(r.date)), "Delete", true)) return;
   await STORE.remove("ledger", r.id); await afterWrite();
 };
 
