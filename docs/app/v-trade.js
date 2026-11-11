@@ -188,6 +188,16 @@ function fillCard(f) {
       <div><small>Charges</small><b>${money(f.fees_total)}</b></div><div><small>Source</small><b>${esc(f.source || "")}</b></div></div>
     <div class="btnrow" style="margin-top:12px"><button class="btn sm ghost" data-act="editfill" data-id="${f.id}">Edit</button><button class="btn sm danger" data-act="delfill" data-id="${f.id}">Delete</button></div></div>`;
 }
+
+const PB_NAME = { t1: "Target 1", t2: "Target 2" };
+function pbCard(o) {
+  const st = o.pb_state, cur = MKT[o.portfolio].cur, pb = o.pb || {};
+  const tg = (st.targets || []).map(t => `${PB_NAME[t.reason] || esc(t.reason)} ${money(t.price)}`).join(" · ");
+  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:8px;min-width:0"><span class="pill dn">SELL</span><b style="font-size:16px">${esc(o.symbol)}</b><span class="pill brand">playbook</span></div><span class="pill up">active</span></div>
+    <div class="kv" style="margin-top:10px"><div><small>Quantity left</small><b>${num(st.remaining)}</b></div><div><small>${st.be ? "Trailing stop" : "Stop-loss"}</small><b>${money(st.stop)}</b></div>
+      <div><small>Next targets</small><b>${tg || "none left"}</b></div><div><small>Trail</small><b>${st.exit_next ? "Exit at next open" : (st.be ? `Exits on a close below the ${esc(pb.ema_len || "")}-day average` : "Starts at " + esc(pb.be_r || "") + "R")}</b></div></div>
+    <div class="hint">Exits are placed automatically by the daily run once a target, the stop or the trail is hit. Nothing to cancel here.</div></div>`;
+}
 Views.orders = function () {
   const tabs = [["open", "Open"], ["filled", "Executed"], ["closed", "Closed"]];
   const F = { open: o => o.status === "pending" || o.status === "waiting", closed: o => ["cancelled", "expired", "rejected", "filled"].includes(o.status) && o.status !== "filled" };
@@ -200,10 +210,10 @@ Views.orders = function () {
   } else {
     const list = S.orders.filter(o => o.portfolio === M && F[OTAB](o)).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     body = `<button class="btn brand block" data-act="neworder">${icon("plus")} New order</button>` +
-      (list.length ? list.map(orderCard).join("") : emptyBox(OTAB === "open" ? "📋" : "🗂️", OTAB === "open" ? "No open orders" : "Nothing here", OTAB === "open" ? "Orders you place wait here until the next market close, when the daily job fills them." : "Cancelled, expired and rejected orders show here.")) +
+      (list.length || (OTAB === "open" && livePB().length) ? (OTAB === "open" ? livePB().map(pbCard).join("") : "") + list.map(orderCard).join("") : emptyBox(OTAB === "open" ? "📋" : "🗂️", OTAB === "open" ? "No open orders" : "Nothing here", OTAB === "open" ? "Orders you place wait here until the next market close, when the daily job fills them." : "Cancelled, expired and rejected orders show here.")) +
       (OTAB === "open" ? `<div class="card note"><b style="color:var(--ink)">How orders fill</b><br>Market fills at the next open. A limit buy fills at the open if it is at or below your price, otherwise at your price if the low reaches it. A stop triggers when the price reaches it; if the stock gaps through, you fill at the open. A buy blocks funds (quantity × price + charges) until it fills, is cancelled or expires. No margin, no short selling.</div>` : "");
   }
-  return notices() + `<div class="utabs">${tabs.map(t => `<button role="tab" aria-selected="${OTAB === t[0]}" data-act="otab" data-v="${t[0]}">${t[1]}${t[0] === "open" && livePending().length ? ` (${livePending().length})` : ""}</button>`).join("")}</div>` + body;
+  return notices() + `<div class="utabs">${tabs.map(t => `<button role="tab" aria-selected="${OTAB === t[0]}" data-act="otab" data-v="${t[0]}">${t[1]}${t[0] === "open" && livePending().length + livePB().length ? ` (${livePending().length + livePB().length})` : ""}</button>`).join("")}</div>` + body;
 };
 ACT.otab = el => { OTAB = el.dataset.v; render(); };
 

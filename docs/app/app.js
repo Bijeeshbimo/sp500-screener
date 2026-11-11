@@ -8,7 +8,7 @@ function headerInfo() {
   switch (TAB) {
     case "home": return ["Breakout Desk", `${MKT[M].name} · ${d ? "screener as of " + fmtDate(d.meta.date) : "loading data…"}`];
     case "scan": return ["Screener", d ? `${d.meta.cfg.name} · ${d.meta.date} close` : "loading…"];
-    case "orders": return ["Orders", `${MKT[M].name} · ${livePending().length} open`];
+    case "orders": return ["Orders", `${MKT[M].name} · ${livePending().length + livePB().length} open`];
     case "port": return ["Portfolio", `${MKT[M].name} · prices as of ${last || "(none yet)"}`];
     default: return ["More", ""];
   }

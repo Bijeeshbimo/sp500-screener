@@ -238,6 +238,7 @@ const lastSession = () => SESS[M] || today();
 const stopOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "STOP" && (o.status === "pending" || o.status === "waiting"));
 const targetOrderFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.side === "SELL" && o.type === "LIMIT" && (o.status === "pending" || o.status === "waiting"));
 const pbFor = sym => S.orders.find(o => o.portfolio === M && o.symbol === sym && o.pb && o.pb_state && !o.pb_state.finished);
+const livePB = () => S.orders.filter(o => o.portfolio === M && o.pb && o.side === "BUY" && o.status === "filled" && o.pb_state && !o.pb_state.finished);
 const livePending = () => S.orders.filter(o => o.portfolio === M && (o.status === "pending" || o.status === "waiting"));
 const hasMoney = () => S.ledger.some(r => r.portfolio === M);
 
