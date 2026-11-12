@@ -7,6 +7,7 @@
   "use strict";
 
   const DEFAULT_SETTINGS = {
+    segments: { IN: true, US: true },     /* display switch only: hidden segments keep all their data and the engine keeps running them */
     in: { brokerage_pct: 0, stt_pct: 0.1, stamp_buy_pct: 0.015, exch_pct: 0.00297, sebi_pct: 0.0001, gst_pct: 18, dp_charge: 12.5, slippage_bps: 0 },
     us: { brokerage_pct: 0.10, legacy_brokerage_pct: 0.25, min_brokerage: 0.01, max_brokerage: 10, exch_pct: 0.005, gst_pct: 18, other_pct: 0, slippage_bps: 0 },
     fx: { markup_pct: 1.0, gst_pct_of_inr: 0.179, bank_charge_inr: 0, payin_fee_usd: 0, payin_free_from_usd: 100,

@@ -13,6 +13,7 @@ import copy
 import math
 
 DEFAULT_SETTINGS = {
+    "segments": {"IN": True, "US": True},   # display only; the engine always processes both
     "in": {"brokerage_pct": 0.0, "stt_pct": 0.1, "stamp_buy_pct": 0.015, "exch_pct": 0.00297, "sebi_pct": 0.0001,
            "gst_pct": 18.0, "dp_charge": 12.5, "slippage_bps": 0.0},
     "us": {"brokerage_pct": 0.10, "legacy_brokerage_pct": 0.25, "min_brokerage": 0.01, "max_brokerage": 10.0, "exch_pct": 0.005, "gst_pct": 18.0, "other_pct": 0.0, "slippage_bps": 0.0},

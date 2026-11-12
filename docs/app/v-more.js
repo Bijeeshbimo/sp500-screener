@@ -155,6 +155,10 @@ function settingsHtml() {
   return pageHead("Charges & settings") + `<div class="page-in"><div class="card note">Starting values follow Dhan's published pricing. Past trades and top-ups keep the charges they were saved with; changing a rate only affects new ones (or a fill you edit).</div>
     <div class="sec"><h2>Data source</h2></div><div class="card g1"><label class="fld"><span>GitHub Pages address (where the daily screener data is read from)</span><input id="db" type="url" inputmode="url" value="${esc(ls.get("bd-data-base") || dataBase())}" autocapitalize="off"></label>
       <p class="hint" style="margin:0">Only change this if your site address is different. Leave it as it is otherwise.</p></div>
+    <div class="sec"><h2>Markets</h2></div><div class="card g1">
+      <label class="chk"><input type="checkbox" data-s="segments.IN" ${segOn("IN") ? "checked" : ""}><span><b>India (NSE)</b><br><small class="mut">Screener and practice account</small></span></label>
+      <label class="chk"><input type="checkbox" data-s="segments.US" ${segOn("US") ? "checked" : ""}><span><b>US</b><br><small class="mut">Screener and practice account</small></span></label>
+      <div class="hint" style="margin:0">Switching a market off only hides it. Its positions, orders, trades and funds are kept exactly as they are, pending orders keep filling in the daily run, and switching it back on shows everything as you left it.</div></div>
     ${grp("playbook")}${grp("in")}${grp("us")}${grp("fx")}${grp("risk")}
     <div class="sec"><h2>Order engine</h2></div><div class="card"><label class="fld"><span>If a stop and a target could both trigger in one session, assume</span><select data-s="engine.same_bar_priority"><option value="stop"${st.engine.same_bar_priority === "stop" ? " selected" : ""}>the stop hit first (conservative)</option><option value="target"${st.engine.same_bar_priority === "target" ? " selected" : ""}>the target hit first</option></select></label></div></div>
     <div class="page-ft"><button class="btn ghost" data-act="resetsettings">Reset</button><button class="btn brand" data-act="savesettings">Save settings</button></div>`;
@@ -163,12 +167,15 @@ ACT.opensettings = () => { openPage(settingsHtml()); };
 ACT.savesettings = async () => {
   const L = topLayer(), out = PC.mergeSettings(S.settings);
   $$("[data-s]", L.el).forEach(el => { const [g, k] = el.dataset.s.split("."); out[g][k] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : (el.value === "" ? out[g][k] : +el.value); });
+  if (!out.segments.IN && !out.segments.US) return toast("Keep at least one market on");
+  const off = ["IN", "US"].filter(m => segOn(m) && !out.segments[m]);
+  if (off.length) { const live = S.orders.filter(o => off.includes(o.portfolio) && (o.status === "pending" || o.status === "waiting")).length; if (live && !await ask("Hide this market?", `${live} pending order(s) stay active and keep filling in the daily run. Everything is kept and reappears when you switch the market back on.`, "Hide")) return; }
   const db = $("#db", L.el).value.trim(), cur = ls.get("bd-data-base") || "";
   await STORE.saveSettings(out);
   if (db && db !== dataBase() && db !== cur) { ls.set("bd-data-base", db); MD = {}; loadMarket(M, true).then(() => { render(); }).catch(() => {}); }
-  await afterWrite(); toast("Settings saved");
+  await afterWrite(); fixM(); ensureMarket(M).then(() => render()); render(); toast("Settings saved");
 };
 ACT.resetsettings = async () => {
   if (!await ask("Reset every rate?", "Charges, playbook and risk settings go back to the defaults.", "Reset", true)) return;
-  await STORE.saveSettings({}); await afterWrite(); closeAll(() => toast("Defaults restored"));
+  await STORE.saveSettings({ segments: PC.mergeSettings(S.settings).segments }); await afterWrite(); closeAll(() => toast("Defaults restored"));
 };

@@ -16,10 +16,12 @@ function headerInfo() {
 
 function render() {
   if (!STORE) return;
+  fixM();
   compute();
   const [t, sub] = headerInfo();
   $("#ttl").innerHTML = `<b>${esc(t)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}`;
-  $("#mseg").hidden = TAB === "more";
+  $("#mseg").hidden = TAB === "more" || segList().length < 2;
+  $$("#mseg button").forEach(b => { b.hidden = !segOn(b.dataset.v); });
   $$("#mseg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === M));
   const rb = $("#refresh-btn"); rb.innerHTML = icon("refresh") + (NEWDATA ? '<span class="dot"></span>' : "");
   const pend = livePending().filter(o => !o.parent_id || o.status === "pending").length;
@@ -34,6 +36,7 @@ function refreshLayers() { LAYERS.forEach(L => { if (L.opts.render) L.opts.rende
 
 ACT.tab = el => { if (LAYERS.length) return closeAll(() => ACT.tab(el)); TAB = el.dataset.v; render(); $("#view").scrollTop = 0; if (["home", "scan"].includes(TAB)) ensureMarket(M); };
 ACT.mkt = async el => {
+  if (!segOn(el.dataset.v)) return;
   M = el.dataset.v; ls.set("bd-m", M); render();
   await ensureMarket(M); render();
 };
@@ -56,7 +59,12 @@ function showAuth() {
   const cred = () => ({ email: $("#a-email").value.trim(), password: $("#a-pass").value });
   const go = fn => async () => { try { msg(""); const c = cred(); await fn(c); $("#auth").hidden = true; $("#a-pass").value = ""; await start(); } catch (e) { msg(errText(e)); } };
   $("#auth-form").onsubmit = e => { e.preventDefault(); go(c => STORE.signIn(c.email, c.password))(); };
-  $("#a-up").onclick = go(c => STORE.signUp(c.email, c.password));
+  $("#a-up").onclick = go(c => {
+    const seg = { IN: $("#a-seg-in").checked, US: $("#a-seg-us").checked };
+    if (!seg.IN && !seg.US) throw new Error("Choose at least one market: India or US.");
+    window.__newSegs = seg;
+    return STORE.signUp(c.email, c.password).catch(e => { window.__newSegs = null; throw e; });
+  });
   $("#a-reset").onclick = async () => {
     const e = $("#a-email").value.trim(); if (!e) return msg("Type your email first.");
     try { await STORE.reset(e); msg("If that email has an account, a password reset link is on its way.", true); } catch (x) { msg(errText(x)); }
@@ -73,7 +81,13 @@ async function start() {
   $("#auth").hidden = true; $("#boot").hidden = false; $("#boot-retry").hidden = true; $("#boot-msg").textContent = "Loading your account…";
   try {
     await loadMeta(true).catch(() => {});
-    await Promise.all([ensureMarketQuiet(M), reload()]);
+    await reload();
+    if (window.__newSegs) {                       // a brand-new account: save the segments chosen on the sign-up form
+      const out = PC.mergeSettings(S.settings); out.segments = window.__newSegs; window.__newSegs = null;
+      await STORE.saveSettings(out); await reload();
+    }
+    fixM();
+    await ensureMarketQuiet(M);
   } catch (e) { return bootError(e); }
   compute();
   $("#boot").hidden = true;
