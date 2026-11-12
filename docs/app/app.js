@@ -91,7 +91,7 @@ async function start() {
   } catch (e) { return bootError(e); }
   compute();
   $("#boot").hidden = true;
-  render();
+  render(); loadHidden();
   if (!window.__started) {
     window.__started = true;
     document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - LASTCHK > 120000) checkNewData(true).then(() => render()); });

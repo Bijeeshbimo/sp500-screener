@@ -189,10 +189,12 @@ async function checkNewData(quiet) {
   if (!quiet) toast(NEWDATA ? "New data is available" : "You already have the latest data");
   return NEWDATA;
 }
+/* hidden markets are still kept fresh in the background (never shown) so they are ready the moment they are switched back on */
+function loadHidden(force) { ["IN", "US"].filter(m => !segOn(m)).forEach(m => { loadMarket(m, force).then(() => { delete MDERR[m]; }).catch(() => {}); }); }
 async function reloadData() {                                     // pulls fresh screener files and re-reads the account
   await loadMeta(true); MD = {};
   await Promise.all([loadMarket(M, true), reload()]);
-  NEWDATA = false;
+  NEWDATA = false; loadHidden(true);
 }
 async function reload() {
   try {
